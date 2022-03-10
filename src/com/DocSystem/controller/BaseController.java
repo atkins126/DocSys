@@ -234,7 +234,7 @@ public class BaseController  extends BaseFunction{
 	        		}
 	        	} catch (IOException e) {
 					Log.debug("initLogFile() Failed to create logFile:" + logFilePath);
-					e.printStackTrace();
+					Log.info(e);
 					Log.logFile = null;
 				}
 			}
@@ -670,7 +670,7 @@ public class BaseController  extends BaseFunction{
 	    	return subEntryList;
     	}catch(Exception e){
     		Log.debug("getLocalEntryList() Excepiton for " + doc.getDocId() + " " + doc.getPath() + doc.getName());    		
-    		e.printStackTrace();
+    		Log.info(e);
     		return null;
     	}
 	}
@@ -738,7 +738,7 @@ public class BaseController  extends BaseFunction{
 	    	return subEntryHashMap;
     	}catch(Exception e){
     		Log.debug("getLocalEntryHashMap() Excepiton for " + doc.getDocId() + " " + doc.getPath() + doc.getName());    		
-    		e.printStackTrace();
+    		Log.info(e);
     		return null;
     	}
 	}
@@ -1497,7 +1497,8 @@ public class BaseController  extends BaseFunction{
 		docAuth.setDeleteEn(1);		//删除权限：可以删除仓库中的文件或目录
 		docAuth.setDownloadEn(1);;	//下载权限：可以下载仓库中的文件或目录
 		docAuth.setHeritable(1);;	//权限继承：0：不可继承  1：可继承
-
+		docAuth.setUploadSize(Long.MAX_VALUE);	//上传限制：最大值
+		
 		ret = reposService.addDocAuth(docAuth);
 		Log.debug("addRepos() addDocAuth return:" + ret);
 		if(ret == 0)
@@ -1965,7 +1966,7 @@ public class BaseController  extends BaseFunction{
 			//关闭输出流
 			out.close();	
 		}catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 			Log.debug("sendDataToWebPage() Exception");
 		}
 	}
@@ -2162,7 +2163,7 @@ public class BaseController  extends BaseFunction{
 			{
 				out.close();						
 			}
-			e.printStackTrace();
+			Log.info(e);
 			Log.debug("sendFileToWebPage() Exception");
 		}
 	}
@@ -2224,7 +2225,7 @@ public class BaseController  extends BaseFunction{
 			{
 				out.close();						
 			}
-			e.printStackTrace();
+			Log.info(e);
 			Log.debug("sendFileToWebPage() Exception");
 		}
 	}
@@ -2338,7 +2339,7 @@ public class BaseController  extends BaseFunction{
 					response.setHeader("Content-Range", contentRange);
 					bis.skip(p);
 				} else if (rangeSwitch == 2) {
-					String contentRange = range.replace("=", " ") + "/" + new Long(fileLength).toString();
+					String contentRange = range.replaceAll("=", " ") + "/" + new Long(fileLength).toString();
 					response.setHeader("Content-Range", contentRange);
 					bis.skip(p);
 				} else {
@@ -2380,7 +2381,7 @@ public class BaseController  extends BaseFunction{
 		} catch (IOException ie) {
 			// 忽略 ClientAbortException 之类的异常
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
 	}
 
@@ -2473,7 +2474,7 @@ public class BaseController  extends BaseFunction{
 			boolean ret = loginCheck(rt, tmp_user, uLists, session,response);
 			if(ret == false)
 			{
-				Log.debug("loginCheck() 登录失败");
+				Log.error("loginCheck() 登录失败");
 				return null;
 			}
 			return uLists.get(0);
@@ -2488,7 +2489,7 @@ public class BaseController  extends BaseFunction{
 			boolean ret = loginCheck(rt, tmp_user, uLists, session,response);
 			if(ret == false)
 			{
-				Log.debug("loginCheck() 登录失败");
+				Log.error("loginCheck() 登录失败");
 				return null;
 			}
 			return uLists.get(0);
@@ -2501,13 +2502,14 @@ public class BaseController  extends BaseFunction{
 			//Add LDAP User into DB
 			if(checkSystemUsersCount(rt) == false)
 			{
+				Log.error("loginCheck() checkSystemUsersCount Failed!");	
 				return null;			
 			}
 			
 			//For User added by LDAP login no need to check tel and email
 			if(userCheck(ldapLoginUser, false, false, rt) == false)
 			{
-				Log.debug("用户检查失败!");			
+				Log.error("loginCheck() userCheck Failed!");			
 				return null;			
 			}
 
@@ -2554,7 +2556,8 @@ public class BaseController  extends BaseFunction{
 			return null;
 		}
 		
-		List<User> list = readLdap(ctx, "", userName);
+		String filter = systemLdapConfig.filter;
+		List<User> list = readLdap(ctx, "", filter, systemLdapConfig.loginMode, userName);
 		Log.printObject("ldapLoginCheck", list);
 		if(list == null || list.size() != 1)
 		{
@@ -2577,18 +2580,26 @@ public class BaseController  extends BaseFunction{
     		//String basedn = "o=NSN";
     		if(systemLdapConfig.enabled == null || systemLdapConfig.enabled == false)
     		{
+    			Log.error("getLDAPConnection() systemLdapConfig.enable is " + systemLdapConfig.enabled);
     			return null;
     		}
     				
     		String LDAP_URL = systemLdapConfig.url;
     		if(LDAP_URL == null || LDAP_URL.isEmpty())
     		{
-    			Log.debug("getLDAPConnection LDAP_URL is null or empty, LDAP_URL" + LDAP_URL);
+    			Log.debug("getLDAPConnection LDAP_URL is null or empty, LDAP_URL:" + LDAP_URL);
     			return null;
     		}
     			
     		String basedn = systemLdapConfig.basedn;
+    		Log.info("getLDAPConnection() basedn:" + basedn);    		
             
+    		String loginMode = systemLdapConfig.loginMode;
+    		Log.info("getLDAPConnection() loginMode:" + loginMode);   
+    		
+    		String filter = systemLdapConfig.filter;
+    		Log.info("getLDAPConnection() filter:" + filter);       		
+    		
             Hashtable<String,String> HashEnv = new Hashtable<String,String>();
             HashEnv.put(Context.SECURITY_AUTHENTICATION, "simple"); // LDAP访问安全级别(none,simple,strong)
             
@@ -2599,7 +2610,13 @@ public class BaseController  extends BaseFunction{
     		}
             else
             {
-            	String userAccount = "uid=" + userName + "," + basedn;     
+            	String userAccount =  systemLdapConfig.userAccount;
+            	if(userAccount == null)
+            	{
+            		userAccount = loginMode + "=" + userName + "," + basedn;     
+            	}
+            	Log.debug("getLDAPConnection() userAccount:" + userAccount);    			
+            	
     			HashEnv.put(Context.SECURITY_PRINCIPAL, userAccount);
             	Log.debug("getLDAPConnection() authMode:" + systemLdapConfig.authMode); 
     			if(systemLdapConfig.authMode != null)
@@ -2621,56 +2638,54 @@ public class BaseController  extends BaseFunction{
             HashEnv.put(Context.PROVIDER_URL, LDAP_URL);
             ctx =  new InitialLdapContext(HashEnv, null);//new InitialDirContext(HashEnv);// 初始化上下文	
 		} catch (AuthenticationException e) {
-			e.printStackTrace();
+			Log.info(e);
 		} catch (CommunicationException e) {
-			e.printStackTrace();
+			Log.info(e);
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
     	
         return ctx;
     }
     
-    public List<User> readLdap(LdapContext ctx, String basedn, String userId){
+    public List<User> readLdap(LdapContext ctx, String basedn, String filter, String loginMode, String userName){
 		
 		List<User> lm=new ArrayList<User>();
 		try {
 			 if(ctx!=null){
-				//过滤条件
-	            //String filter = "(&(objectClass=*)(uid=*))";
-	            String filter = "(&(objectClass=*)(uid=" +userId+ "))";
-				
-	            String[] attrPersonArray = { "uid", "userPassword", "displayName", "cn", "sn", "mail", "description" };
+	            String[] attrPersonArray = { loginMode, "userPassword", "displayName", "cn", "sn", "mail", "description"};
 	            SearchControls searchControls = new SearchControls();//搜索控件
-	            searchControls.setSearchScope(2);//搜索范围
+	            searchControls.setSearchScope(SearchControls.SUBTREE_SCOPE);//搜索范围
 	            searchControls.setReturningAttributes(attrPersonArray);
 	            //1.要搜索的上下文或对象的名称；2.过滤条件，可为null，默认搜索所有信息；3.搜索控件，可为null，使用默认的搜索控件
-	            NamingEnumeration<SearchResult> answer = ctx.search(basedn, filter.toString(),searchControls);
+	            filter = "(&" + filter + "("+ loginMode + "=" + userName + ")" + ")";
+	            NamingEnumeration<SearchResult> answer = ctx.search(basedn, filter, searchControls);
 	            while (answer.hasMore()) {
 	                SearchResult result = (SearchResult) answer.next();
 	                NamingEnumeration<? extends Attribute> attrs = result.getAttributes().getAll();
 	                
+	                Log.info("readLdap() userInfo:");
 	                User lu=new User();
 	                while (attrs.hasMore()) {
 	                    Attribute attr = (Attribute) attrs.next();
-	                    if("userPassword".equals(attr.getID())){
+	                    Log.info("readLdap() " + attr.getID() + " = " + attr.get().toString());
+	                    if(loginMode.equals(attr.getID())){
+	                    	lu.setName(attr.get().toString());
+	                    } 
+	                    else if("userPassword".equals(attr.getID()))
+	                    {
 	                    	Object value = attr.get();
 	                    	lu.setPwd(new String((byte [])value));
-	                    }else if("uid".equals(attr.getID())){
-	                    	lu.setName(attr.get().toString());
-	                    }else if("displayName".equals(attr.getID())){
-	                    	Log.debug("readLdap displayName:" + attr.get().toString());
-	                    	//lu.setRealName(attr.get().toString());
 	                    }
+	                    //else if("displayName".equals(attr.getID())){
+	                    	//lu.setRealName(attr.get().toString());
+	                    //}
 	                    else if("cn".equals(attr.getID())){
-	                    //	lu.cn = attr.get().toString();
-	                    	Log.debug("readLdap cn:" + attr.get().toString());
 	                    	lu.setRealName(attr.get().toString());
 	                    }
-	                	else if("sn".equals(attr.getID())){
-	                    //	lu.sn = attr.get().toString();
-	                		Log.debug("readLdap sn:" + attr.get().toString());
-	                    }
+	                	//else if("sn".equals(attr.getID())){
+	                	//	//	lu.sn = attr.get().toString();
+	                	//}
 	                    else if("mail".equals(attr.getID())){
 	                    	lu.setEmail(attr.get().toString());
 	                    }
@@ -2686,7 +2701,7 @@ public class BaseController  extends BaseFunction{
 			 }
 		}catch (Exception e) {
 			Log.debug("获取用户信息异常:");
-			e.printStackTrace();
+			Log.info(e);
 		}
 		 
 		return lm;
@@ -3299,6 +3314,7 @@ public class BaseController  extends BaseFunction{
 		{
 			if(remoteServerDocCommit(repos, doc, commitMsg, login_user, rt, false, 2) == null)
 			{
+				unlockDoc(doc, lockType, login_user);
 				Log.debug("addDoc_FSM() remoteServerDocCommit Failed");
 				rt.setError("远程推送失败");
 				return false;
@@ -3407,6 +3423,7 @@ public class BaseController  extends BaseFunction{
 		{
 			if(remoteServerDocCommit(repos, doc,commitMsg,login_user,rt, false, 2) == null)
 			{
+				unlockDoc(doc, lockType, login_user);
 				Log.docSysWarningLog("addDocEx_FSM remoteServerDocCommit Failed", rt);
 				rt.setError("远程推送失败");
 				return false;
@@ -3934,7 +3951,7 @@ public class BaseController  extends BaseFunction{
 			Log.debug("executeUniqueCommonActionList completed for repos: " + reposId);			
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		} finally {
 			if(uniqueAction.getIsRunning())
 			{
@@ -4002,7 +4019,7 @@ public class BaseController  extends BaseFunction{
 					}					
 					if(remote.autoPull != null && remote.autoPull == 1)
 					{
-						channel.remoteStoragePull(remote, repos, doc, login_user, "远程存储自动拉取", subDocSyncupFlag == 2, remote.autoPullForce == 1, true, rt);
+						channel.remoteStoragePull(remote, repos, doc, login_user, null, subDocSyncupFlag == 2, remote.autoPullForce == 1, true, rt);
 					}
 				}
 			}
@@ -4079,39 +4096,44 @@ public class BaseController  extends BaseFunction{
 		//用户手动刷新：总是会触发索引刷新操作
 		if(action.getAction() == Action.FORCESYNC || action.getAction() == Action.SYNC)
 		{
-			Log.debug("**************************** syncupForDocChange() 强制刷新Index for: " + doc.getDocId() + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
+			Log.info("**************************** checkAndUpdateIndex() 强制刷新Index for: " + doc.getDocId() + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
 			if(docDetect(repos, doc))
 			{
 				if(doc.getDocId() == 0)
 				{
 					//Delete All Index Lib
+					Log.info("checkAndUpdateIndex() delete all index lib");
 					deleteDocNameIndexLib(repos);
 					deleteRDocIndexLib(repos);
 					deleteVDocIndexLib(repos);
 					//Build All Index For Doc
+					Log.info("checkAndUpdateIndex() buildIndexForDoc");
 					buildIndexForDoc(repos, doc, null, null, rt, 2, true);
 				}
 				else
 				{
 					//deleteAllIndexUnderDoc
+					Log.info("checkAndUpdateIndex() delete all index for doc");
 					deleteAllIndexForDoc(repos, doc, 2);
 					//buildAllIndexForDoc
+					Log.info("checkAndUpdateIndex() buildIndexForDoc");
 					buildIndexForDoc(repos, doc, null, null, rt, 2, true);
 				}
 			}
-			Log.debug("**************************** syncupForDocChange() 结束强制刷新Index for: " + doc.getDocId()  + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
+			Log.info("**************************** checkAndUpdateIndex() 结束强制刷新Index for: " + doc.getDocId()  + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
 		}
 		else	//页面刷新：只在检测到文件有改动的时候才刷新索引
 		{
 			if(localChanges.size() > 0 || remoteChanges.size() > 0)
 			{
-				Log.debug("**************************** syncupForDocChange() 开始刷新Index for: " + doc.getDocId()  + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
+				Log.info("**************************** checkAndUpdateIndex() 开始刷新Index for: " + doc.getDocId()  + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
 				if(docDetect(repos, doc))
 				{	
 					HashMap<Long, Doc> doneList = new HashMap<Long, Doc>();
+					Log.info("checkAndUpdateIndex() rebuildIndexForDoc");					
 					rebuildIndexForDoc(repos, doc, remoteChanges, localChanges, doneList, rt, subDocSyncupFlag, false);	
 				}
-				Log.debug("**************************** syncupForDocChange() 结束刷新Index for: " + doc.getDocId()  + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
+				Log.info("**************************** checkAndUpdateIndex() 结束刷新Index for: " + doc.getDocId()  + " " + doc.getPath() + doc.getName() + " subDocSyncupFlag:" + subDocSyncupFlag);
 			}
 		}
 	}
@@ -5904,6 +5926,7 @@ public class BaseController  extends BaseFunction{
 			Integer reposId, String path, String name, boolean forceCheck,
 			ReturnAjax rt) 
 	{
+		Log.debug("checkAndGetAccessInfo() reposId:" + reposId + " path:" + path + " name:" + name + " shareId:" + shareId);
 		ReposAccess reposAccess = null;
 		if(shareId != null)
 		{
@@ -6409,6 +6432,7 @@ public class BaseController  extends BaseFunction{
 		{
 			if(remoteServerDocCommit(repos, doc, commitMsg, login_user, rt, true, 2) == null)
 			{
+				unlockDoc(doc, lockType, login_user);
 				Log.debug("updateDoc_FSM() remoteServerDocCommit Failed");
 				rt.setError("远程推送失败");
 				return false;
@@ -6494,6 +6518,7 @@ public class BaseController  extends BaseFunction{
 		{
 			if(remoteServerDocCommit(repos, doc, commitMsg,login_user,rt, true, 2) == null)
 			{
+				unlockDoc(doc, lockType, login_user);
 				Log.debug("updateDocEx_FSM() remoteServerDocCommit Failed");
 				rt.setError("远程推送失败");
 				return false;
@@ -8442,7 +8467,7 @@ public class BaseController  extends BaseFunction{
 		} catch (Exception e) {
 			Log.debug("updateRealDoc() FileUtil.saveFile " + name +" 异常！");
 			Log.docSysDebugLog(e.toString(), rt);
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
 		
@@ -8558,7 +8583,28 @@ public class BaseController  extends BaseFunction{
 	protected void decryptFile(Channel channel, Repos repos, String path, String name) {
 		channel.decryptFile(repos, path, name);
 	}
-
+	
+	//压缩文件解密
+	protected Doc decryptRootZipDoc(Repos repos, Doc rootZipDoc) {
+		Doc tempRootDoc = rootZipDoc;
+		if(repos.encryptType != null && repos.encryptType != 0)
+		{
+			//TODO: getReposTmpPathForZipDecrypt 返回的路径没有区分用户，也就是说用户将共用解压后的zip文件，这里没有上锁，所以存在风险
+			String zipDocDecryptPath = Path.getReposTmpPathForZipDecrypt(repos, rootZipDoc);
+			File rootFile = new File(rootZipDoc.getLocalRootPath() + rootZipDoc.getPath(), rootZipDoc.getName());
+			String tmpLocalRootPathForZipDoc = zipDocDecryptPath + rootFile.lastModified() + "/";
+			if(FileUtil.isFileExist(tmpLocalRootPathForZipDoc + rootZipDoc.getPath() + rootZipDoc.getName()) == false)
+			{
+				FileUtil.clearDir(tmpLocalRootPathForZipDoc);	//删除旧的临时文件
+				FileUtil.createDir(tmpLocalRootPathForZipDoc);
+				FileUtil.copyFile(rootZipDoc.getLocalRootPath() + rootZipDoc.getPath() + rootZipDoc.getName(), tmpLocalRootPathForZipDoc + rootZipDoc.getPath() + rootZipDoc.getName(), true);
+				decryptFile(repos, tmpLocalRootPathForZipDoc + rootZipDoc.getPath(), rootZipDoc.getName());
+			}
+			tempRootDoc = buildBasicDoc(rootZipDoc.getVid(), null, null, rootZipDoc.getReposPath(), rootZipDoc.getPath(), rootZipDoc.getName(), null, 1, true, tmpLocalRootPathForZipDoc, null, null, null);
+		}
+		return tempRootDoc;
+	}
+	
 	//Function: updateRealDoc
 	//Pramams:
 	//chunkNum: null:非分片上传(直接用uploadFile存为文件)  1: 单文件或单分片文件  >1:多分片文件（需要进行合并）
@@ -8627,7 +8673,7 @@ public class BaseController  extends BaseFunction{
 		} catch (Exception e) {
 			Log.debug("updateRealDoc() FileUtil.saveFile " + name +" 异常！");
 			Log.docSysDebugLog(e.toString(), rt);
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
 		
@@ -8666,7 +8712,7 @@ public class BaseController  extends BaseFunction{
 		    return fileName;
 		} catch (Exception e) {
 			Log.debug("combineChunks() Failed to combine the chunks");
-			e.printStackTrace();
+			Log.info(e);
 			return null;
 		}        
 	}
@@ -8688,7 +8734,7 @@ public class BaseController  extends BaseFunction{
 	    	}
 		} catch (Exception e) {
 			Log.debug("deleteChunks() Failed to combine the chunks");
-			e.printStackTrace();
+			Log.info(e);
 		}  
 	}
 	
@@ -8708,14 +8754,14 @@ public class BaseController  extends BaseFunction{
 			in.close();
 		} catch (Exception e) {
 			Log.debug("isChunkMatched() Exception"); 
-			e.printStackTrace();
+			Log.info(e);
 		} finally {
 			if(in != null)
 			{
 				try {
 					in.close();
 				} catch (Exception e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
 		}
@@ -9224,6 +9270,20 @@ public class BaseController  extends BaseFunction{
         RemoteStorageSession session = doRemoteStorageLogin(repos, remote);
         if(session == null)
         {
+        	//再尝试三次
+        	for(int i=0; i < 3; i++)
+        	{
+        		//Try Again
+        		session = doRemoteStorageLogin(repos, remote);
+        		if(session != null)
+        		{
+        			break;
+        		}
+        	}
+        }
+        
+        if(session == null)
+        {
         	Log.debug("remoteServerDocCommit() 文件服务器登录失败！");
     		rt.setError("文件服务器登录失败！");
     		return null;			
@@ -9254,6 +9314,20 @@ public class BaseController  extends BaseFunction{
 		}
 		
         RemoteStorageSession session = doRemoteStorageLogin(repos, remote);
+        if(session == null)
+        {
+        	//再尝试三次
+        	for(int i=0; i < 3; i++)
+        	{
+        		//Try Again
+        		session = doRemoteStorageLogin(repos, remote);
+        		if(session != null)
+        		{
+        			break;
+        		}
+        	}
+        }
+        
         if(session == null)
         {
         	Log.debug("remoteServerDocCopy() 文件服务器登录失败！");
@@ -9440,6 +9514,20 @@ public class BaseController  extends BaseFunction{
 		
 		ReturnAjax rt = new ReturnAjax();
 		RemoteStorageSession session = doRemoteStorageLogin(repos, remote);
+        if(session == null)
+        {
+        	//再尝试三次
+        	for(int i=0; i < 3; i++)
+        	{
+        		//Try Again
+        		session = doRemoteStorageLogin(repos, remote);
+        		if(session != null)
+        		{
+        			break;
+        		}
+        	}
+        }
+        
         if(session != null)
         {
         	//如果checkOut到临时目录，则不能更新index
@@ -9477,6 +9565,20 @@ public class BaseController  extends BaseFunction{
 		}
 		
 		RemoteStorageSession session = doRemoteStorageLogin(repos, remote);
+        if(session == null)
+        {
+        	//再尝试三次
+        	for(int i=0; i < 3; i++)
+        	{
+        		//Try Again
+        		session = doRemoteStorageLogin(repos, remote);
+        		if(session != null)
+        		{
+        			break;
+        		}
+        	}
+        }
+        
         if(session != null)
         {
         	list = remoteStorageGetHistory(session, remote, repos, doc, maxLogNum);
@@ -9499,6 +9601,20 @@ public class BaseController  extends BaseFunction{
 		}
 		
 		RemoteStorageSession session = doRemoteStorageLogin(repos, remote);
+        if(session == null)
+        {
+        	//再尝试三次
+        	for(int i=0; i < 3; i++)
+        	{
+        		//Try Again
+        		session = doRemoteStorageLogin(repos, remote);
+        		if(session != null)
+        		{
+        			break;
+        		}
+        	}
+        }
+        
         if(session != null)
         {
         	list = remoteStorageGetHistoryDetail(session, remote, repos, doc, commitId);
@@ -9982,19 +10098,19 @@ public class BaseController  extends BaseFunction{
 		File file =new File(filePath);
 		if(!file.exists())
 		{
-			Log.debug("addIndexForRDoc() " + filePath + " 不存在");
+			Log.info("addIndexForRDoc() " + filePath + " 不存在");
 			return false;
 		}
 		
 		if(file.isDirectory())
 		{
-			//Log.debug("addIndexForRDoc() isDirectory");
+			Log.debug("addIndexForRDoc() isDirectory");
 			return false; //LuceneUtil2.addIndex(LuceneUtil2.buildDocumentId(hashId,0), reposId, docId, parentPath, name, hashId, "", indexLib);
 		}
 		
 		if(file.length() == 0)
 		{
-			//Log.debug("addIndexForRDoc() fileSize is 0, do delete index");
+			Log.debug("addIndexForRDoc() fileSize is 0, do delete index");
 			return LuceneUtil2.deleteIndex(doc,indexLib);
 		}
 		
@@ -10002,7 +10118,7 @@ public class BaseController  extends BaseFunction{
 		String fileSuffix = FileUtil.getFileSuffix(doc.getName());
 		if(fileSuffix != null)
 		{
-			//Log.debug("addIndexForRDoc() docId:" + doc.getDocId() + " parentPath:" + doc.getPath() + " name:" + doc.getName() + " repos:" + repos.getName());
+			Log.debug("addIndexForRDoc() docId:" + doc.getDocId() + " parentPath:" + doc.getPath() + " name:" + doc.getName() + " repos:" + repos.getName());
 			switch(fileSuffix)
 			{
 			case "doc":
@@ -10028,7 +10144,7 @@ public class BaseController  extends BaseFunction{
 			}
 		}
 
-		//Log.debug("addIndexForRDoc() 未知文件类型不支持索引");
+		Log.debug("addIndexForRDoc() 未知文件类型不支持索引");
 		return false;
 	}
 	
@@ -10231,6 +10347,7 @@ public class BaseController  extends BaseFunction{
 		{
 			officeEditorApi = Path.getOfficeEditorApi();
 		}
+		officeType = getOfficeType(officeEditorApi);
 		Log.debug("docSysInit() officeEditorApi:" + officeEditorApi);
 		
 		serverIP = IPUtil.getIpAddress();
@@ -10340,6 +10457,14 @@ public class BaseController  extends BaseFunction{
 		return ret;
 	}
 	
+	private Integer getOfficeType(String officeEditorApi) {
+		if(officeEditorApi == null || officeEditorApi.isEmpty())
+		{
+			return 0;
+		}
+		return 1;
+	}
+
 	private static int getLogLevelFromFile() {
 		File file = new File(docSysIniPath + "debugLogLevel");
 		if(file.exists())
@@ -10430,8 +10555,8 @@ public class BaseController  extends BaseFunction{
 				initReposAutoBackupConfig(repos, autoBackup);
 				if(repos.backupConfig != null)
 				{
-					addDelayTaskForLocalBackup(repos, repos.backupConfig.localBackupConfig, 10, false);
-					addDelayTaskForRemoteBackup(repos, repos.backupConfig.remoteBackupConfig, 10, false);
+					addDelayTaskForLocalBackup(repos, repos.backupConfig.localBackupConfig, 10, null);
+					addDelayTaskForRemoteBackup(repos, repos.backupConfig.remoteBackupConfig, 10, null);
 				}
 				
 				initReposTextSearchConfig(repos);
@@ -10439,8 +10564,8 @@ public class BaseController  extends BaseFunction{
 				Log.debug("************* initReposExtentionConfig End for repos:" + repos.getId() + " " + repos.getName() + " *******\n");
 			}
 	    } catch (Exception e) {
-	        Log.debug("initReposExtentionConfig 异常");
-	        e.printStackTrace();
+	        Log.info("initReposExtentionConfig 异常");
+	        Log.info(e);
 		}	
 	}
 
@@ -10469,7 +10594,7 @@ public class BaseController  extends BaseFunction{
 		Log.debug("\n**** initReposRemoteServerConfig 自动备份初始化完成 *****");
 	}
 	
-	public void addDelayTaskForLocalBackup(Repos repos, BackupConfig localBackupConfig, int offsetMinute, boolean firstBackup) {
+	public void addDelayTaskForLocalBackup(Repos repos, BackupConfig localBackupConfig, int offsetMinute, Long forceStartDelay) {
 		if(localBackupConfig == null)
 		{
 			return;
@@ -10482,9 +10607,10 @@ public class BaseController  extends BaseFunction{
 			return;
 		}
 		
-		if(firstBackup)
+		if(forceStartDelay != null)
 		{
-			delayTime = 60L; //1分钟后执行第一次备份
+			Log.debug("addDelayTaskForLocalBackup forceStartDelay:" + forceStartDelay + " 秒后强制开始备份！" );											
+			delayTime = forceStartDelay; //1分钟后执行第一次备份
 		}
 		Log.debug("addDelayTaskForLocalBackup delayTime:" + delayTime + " 秒后开始备份！" );											
 				
@@ -10556,12 +10682,23 @@ public class BaseController  extends BaseFunction{
 	                        //将自己从任务备份任务表中删除
 	                        latestBackupTask.remove(createTime);
 	                        
-	                        //当前任务刚执行完，可能执行了一分钟不到，所以需要加上偏移时间
-	                        addDelayTaskForLocalBackup(latestReposInfo, latestLocalBackupConfig, 5, false);                      
-                        	Log.debug("******** LocalBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行完成\n");
+	                        String msgInfo = (String) rt.getMsgInfo();
+	                        if(msgInfo != null && msgInfo.equals("LockDocFailed"))  //TODO: 目前只考虑锁定失败的情况
+	                        {
+	                        	Log.debug("******** LocalBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行失败\n");		                        
+	                        	Log.debug("******** LocalBackupDelayTask repos is busy, start backup 5 minuts later\n");
+		                        addDelayTaskForLocalBackup(latestReposInfo, latestLocalBackupConfig, 5, 300L); //5分钟后强制开始备份                      	                        	
+	                        }
+	                        else
+	                        {
+		                        Log.debug("******** LocalBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行完成\n");
+	                        	//当前任务刚执行完，可能执行了一分钟不到，所以需要加上偏移时间
+	                        	addDelayTaskForLocalBackup(latestReposInfo, latestLocalBackupConfig, 5, null);                      
+	                        }
+                        	Log.debug("******** LocalBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行结束\n");		                        
                         } catch(Exception e) {
                         	Log.debug("******** LocalBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行异常\n");
-                        	e.printStackTrace();
+                        	Log.info(e);
                         	
                         }
                         
@@ -10571,7 +10708,7 @@ public class BaseController  extends BaseFunction{
                 TimeUnit.SECONDS);
 	}
 	
-	public void addDelayTaskForRemoteBackup(Repos repos, BackupConfig remoteBackupConfig, int offsetMinute, boolean firstBackup) {
+	public void addDelayTaskForRemoteBackup(Repos repos, BackupConfig remoteBackupConfig, int offsetMinute, Long forceStartDelay) {
 		if(remoteBackupConfig == null)
 		{
 			return;
@@ -10584,11 +10721,13 @@ public class BaseController  extends BaseFunction{
 			return;
 		}
 		
-		if(firstBackup)
+		if(forceStartDelay != null)
 		{
-			delayTime = 60L; //1分钟后执行第一次备份
+			Log.debug("addDelayTaskForRemoteBackup forceStartDelay:" + forceStartDelay + " 秒后强制开始备份！" );											
+			delayTime = forceStartDelay; //1分钟后执行第一次备份
+
 		}
-		Log.debug("addDelayTaskForLocalBackup delayTime:" + delayTime + " 秒后开始备份！" );											
+		Log.debug("addDelayTaskForRemoteBackup delayTime:" + delayTime + " 秒后开始备份！" );											
 		
 		Channel channel = ChannelFactory.getByChannelName("businessChannel");
 		if(channel == null)
@@ -10655,12 +10794,24 @@ public class BaseController  extends BaseFunction{
 	                        //将自己从任务备份任务表中删除
 	                        latestBackupTask.remove(createTime);
 	                        
-	                        //当前任务刚执行完，可能执行了一分钟不到，所以需要加上偏移时间
-	                        addDelayTaskForRemoteBackup(latestReposInfo, latestRemoteBackupConfig, 5, false);                      
-                        	Log.debug("******** RemoteBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行完成\n");
+	                        String msgInfo = (String) rt.getMsgInfo();
+	                        if(msgInfo != null && msgInfo.equals("LockDocFailed")) //TODO: 目前只考虑锁定失败的情况
+	                        {
+	                        	Log.debug("******** RemoteBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行失败\n");
+		                        
+	                        	Log.debug("******** RemoteBackupDelayTask repos is busy, start backup 5 minuts later\n");
+		                        addDelayTaskForRemoteBackup(latestReposInfo, latestRemoteBackupConfig, 5, 300L);                      
+	                        }
+	                        else
+	                        {
+	                            Log.debug("******** LocalBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行完成\n");
+		                        //当前任务刚执行完，可能执行了一分钟不到，所以需要加上偏移时间
+		                        addDelayTaskForRemoteBackup(latestReposInfo, latestRemoteBackupConfig, 5, null);                      
+	                        }
+                            Log.debug("******** LocalBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行结束\n");
                         } catch(Exception e) {
                         	Log.debug("******** RemoteBackupDelayTask [" + createTime + "] for repos:" + reposId + " 执行异常\n");
-                        	e.printStackTrace();
+                        	Log.info(e);
                         }
                     }
                 },
@@ -10929,7 +11080,7 @@ public class BaseController  extends BaseFunction{
 			return true;
 		}
 		
-		return FileUtil.moveFileOrDir(path, name, path, "olde" + name, true);
+		return FileUtil.moveFileOrDir(path, name, path, "old" + name, true);
 	}
 	
 	protected EncryptConfig recoverReposEncryptConfig(Repos repos) 
@@ -10939,10 +11090,12 @@ public class BaseController  extends BaseFunction{
 		File file = new File(path, "old" + name);
 		if(file.exists() == false)
 		{
+			Log.info("recoverReposEncryptConfig() there is no old config:" + path + "old" + name);
 			return null;
 		}
 		if(FileUtil.moveFileOrDir(path, "old" + name, path, name, true) == false)
 		{
+			Log.info("recoverReposEncryptConfig() move config failed, from " + path + "old" + name + " to " + path + name);
 			return null;
 		}
 		
@@ -10978,7 +11131,7 @@ public class BaseController  extends BaseFunction{
 		String jsonStr = JSON.toJSONString(config);
 		if(FileUtil.saveDocContentToFile(jsonStr, path, name, "UTF-8") == false)
     	{
-    		Log.debug("generateReposEncryptConfig() 密钥保存失败");
+    		Log.info("generateReposEncryptConfig() 密钥保存失败");
     		return null;
     	}
 		return config;
@@ -11161,7 +11314,7 @@ public class BaseController  extends BaseFunction{
             ret = true;
         } catch (Exception e) {
             Log.debug("sql脚本执行发生异常");
-            e.printStackTrace();
+            Log.info(e);
         }finally{
 	        // 关闭资源
 	        try{
@@ -11170,7 +11323,7 @@ public class BaseController  extends BaseFunction{
 	            if(in!=null) in.close();
 	            if(read!=null) read.close();
 	        }catch(Exception se){
-	            se.printStackTrace();
+	            Log.info(se);
 	        }
 	    }
         
@@ -11222,7 +11375,7 @@ public class BaseController  extends BaseFunction{
             ret = true;
         } catch (Exception e) {
             Log.debug("initDBTables 数据库表初始化发生异常");
-            e.printStackTrace();
+            Log.info(e);
         }finally{
 	        // 关闭资源
 	        try{
@@ -11231,7 +11384,7 @@ public class BaseController  extends BaseFunction{
 	            if(in!=null) in.close();
 	            if(read!=null) read.close();
 	        }catch(Exception se){
-	            se.printStackTrace();
+	            Log.info(se);
 	        }
 	    }
         
@@ -11582,7 +11735,7 @@ public class BaseController  extends BaseFunction{
         try {
 			Class.forName(getJdbcDriverName(dbType));
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
         
@@ -11713,10 +11866,10 @@ public class BaseController  extends BaseFunction{
             conn.close();
         }catch(SQLException se){
             // 处理 JDBC 错误
-            se.printStackTrace();
+            Log.info(se);
         }catch(Exception e){
             // 处理 Class.forName 错误
-            e.printStackTrace();
+            Log.info(e);
         }finally{
             // 关闭资源
             try{
@@ -11726,7 +11879,7 @@ public class BaseController  extends BaseFunction{
             try{
                 if(conn!=null) conn.close();
             }catch(SQLException se){
-                se.printStackTrace();
+                Log.info(se);
             }
         }
 		return ret;
@@ -11757,7 +11910,7 @@ public class BaseController  extends BaseFunction{
         try {
 			Class.forName(getJdbcDriverName(dbType));
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
         
@@ -11819,10 +11972,10 @@ public class BaseController  extends BaseFunction{
             conn.close();
         }catch(SQLException se){
             // 处理 JDBC 错误
-            se.printStackTrace();
+            Log.info(se);
         }catch(Exception e){
             // 处理 Class.forName 错误
-            e.printStackTrace();
+            Log.info(e);
         }finally{
             // 关闭资源
             try{
@@ -11832,7 +11985,7 @@ public class BaseController  extends BaseFunction{
             try{
                 if(conn!=null) conn.close();
             }catch(SQLException se){
-                se.printStackTrace();
+                Log.info(se);
             }
         }
 		return ret;
@@ -11915,7 +12068,7 @@ public class BaseController  extends BaseFunction{
 			Class.forName(getJdbcDriverName(type));
 			
 		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
     
@@ -11931,12 +12084,12 @@ public class BaseController  extends BaseFunction{
 			}
 		} catch (Exception e) {
 			Log.debug("连接数据库失败");
-			e.printStackTrace();
+			Log.info(e);
 		} finally{
             try{
                 if(conn!=null) conn.close();
             }catch(SQLException se){
-                se.printStackTrace();
+                Log.info(se);
             }
         }
         return ret;        
@@ -11954,7 +12107,7 @@ public class BaseController  extends BaseFunction{
 		try {
 			return DriverManager.getConnection(dbUrl, user, pwd);
 		} catch (SQLException e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
 		return null;
 	}
@@ -12122,7 +12275,7 @@ public class BaseController  extends BaseFunction{
     	    ret = true;
         } catch (Exception e) {
             Log.debug("initDBTables 数据库表初始化发生异常");
-            e.printStackTrace();
+            Log.info(e);
         }finally{
 	        // 关闭资源
 	        try{
@@ -12131,7 +12284,7 @@ public class BaseController  extends BaseFunction{
 	            if(in!=null) in.close();
 	            if(read!=null) read.close();
 	        }catch(Exception se){
-	            se.printStackTrace();
+	            Log.info(se);
 	        }
 	    }
         
@@ -12207,10 +12360,10 @@ public class BaseController  extends BaseFunction{
             ret = true;
         }catch(SQLException se){
             // 处理 JDBC 错误
-            se.printStackTrace();
+            Log.info(se);
         }catch(Exception e){
             // 处理 Class.forName 错误
-            e.printStackTrace();
+            Log.info(e);
         }finally{
             // 关闭资源
             try{
@@ -12220,7 +12373,7 @@ public class BaseController  extends BaseFunction{
             try{
                 if(conn!=null) conn.close();
             }catch(SQLException se){
-                se.printStackTrace();
+                Log.info(se);
             }
         }
 		return ret;
@@ -12250,10 +12403,10 @@ public class BaseController  extends BaseFunction{
             ret = true;
         }catch(SQLException se){
             // 处理 JDBC 错误
-            se.printStackTrace();
+            Log.info(se);
         }catch(Exception e){
             // 处理 Class.forName 错误
-            e.printStackTrace();
+            Log.info(e);
         }finally{
             // 关闭资源
             try{
@@ -12263,7 +12416,7 @@ public class BaseController  extends BaseFunction{
             try{
                 if(conn!=null) conn.close();
             }catch(SQLException se){
-                se.printStackTrace();
+                Log.info(se);
             }
         }
 		return ret;
@@ -12674,7 +12827,7 @@ public class BaseController  extends BaseFunction{
 		    		try {
 		    			qDoc.setId(Integer.parseInt(docAuth.getDocId().toString()));
 		    		} catch(Exception e){
-		    			e.printStackTrace();
+		    			Log.info(e);
 		    			continue;
 		    		}
 		    		List<Object> docList = dbQuery(qDoc, DOCSYS_DOC, type, url, user, pwd);
@@ -12734,10 +12887,10 @@ public class BaseController  extends BaseFunction{
             return list;
         }catch(SQLException se){
             // 处理 JDBC 错误
-            se.printStackTrace();
+            Log.info(se);
         }catch(Exception e){
             // 处理 Class.forName 错误
-            e.printStackTrace();
+            Log.info(e);
         }finally{
             // 关闭资源
             try{
@@ -12747,7 +12900,7 @@ public class BaseController  extends BaseFunction{
             try{
                 if(conn!=null) conn.close();
             }catch(SQLException se){
-                se.printStackTrace();
+                Log.info(se);
             }
         }
 		return null;
@@ -12816,10 +12969,10 @@ public class BaseController  extends BaseFunction{
             return ret;
         }catch(SQLException se){
             // 处理 JDBC 错误
-            se.printStackTrace();
+            Log.info(se);
         }catch(Exception e){
             // 处理 Class.forName 错误
-            e.printStackTrace();
+            Log.info(e);
         }finally{
             // 关闭资源
             try{
@@ -12829,7 +12982,7 @@ public class BaseController  extends BaseFunction{
             try{
                 if(conn!=null) conn.close();
             }catch(SQLException se){
-                se.printStackTrace();
+                Log.info(se);
             }
         }
 		return ret;
@@ -13015,7 +13168,7 @@ public class BaseController  extends BaseFunction{
 			}
 		} catch (SQLException e) {
 			//Log.debug("getValueFromResultSet() Failed to get value from ResultSet for field:" + field);
-			//e.printStackTrace();
+			//Log.printException(e);
 		}
 		return null;
 	}
@@ -13076,7 +13229,7 @@ public class BaseController  extends BaseFunction{
 			try {
 				value = Reflect.getFieldValue(obj, name);
 			} catch (Exception e) {
-				e.printStackTrace();
+				Log.info(e);
 				return null;
 			}
 			
@@ -13141,7 +13294,7 @@ public class BaseController  extends BaseFunction{
 				//Log.debug("enocdeString() tmpSqlValue:" + tmpStr);
 				return tmpStr;
 			} catch (Exception e) {
-				e.printStackTrace();
+				Log.info(e);
 			}
 		}
 		return str;
@@ -13371,7 +13524,7 @@ public class BaseController  extends BaseFunction{
         	ps.destroy();
             
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.info(e);
         }
         return result;
     }
@@ -13403,7 +13556,7 @@ public class BaseController  extends BaseFunction{
         	runResult.exitCode = exitCode;
         	runResult.result = result;
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.info(e);
         }
         return ret;
     }
@@ -13483,7 +13636,7 @@ public class BaseController  extends BaseFunction{
              ret = true;
              Log.debug("连接可用");  
         } catch (Exception e) {
-        	e.printStackTrace();
+        	Log.info(e);
             Log.debug("连接打不开!");
         } 
         Log.debug("testUrl() used time:" + (System.currentTimeMillis()-lo) + " ms");
@@ -13503,7 +13656,7 @@ public class BaseController  extends BaseFunction{
              ret = true;
              Log.debug("连接可用");  
         } catch (Exception e) {
-        	e.printStackTrace();
+        	Log.info(e);
             Log.debug("连接打不开!");  
         }  
         Log.debug("testUrlWithTimeOut() used time:" + (System.currentTimeMillis()-lo) + " ms");
@@ -13569,6 +13722,7 @@ public class BaseController  extends BaseFunction{
 			repos.textSearchConfig = reposTextSearchHashMap.get(repos.getId());
 			repos.isTextSearchEnabled = isReposTextSearchEnabled(repos);
 			repos.isBussiness = systemLicenseInfo.hasLicense;
+			repos.officeType = officeType;
 			//get encrypt Config
 			repos.encryptType = 0;
 			EncryptConfig encryptConfig = reposEncryptHashMap.get(repos.getId());
@@ -13583,9 +13737,23 @@ public class BaseController  extends BaseFunction{
 	//注意：该接口需要返回真正的parentZipDoc
 	protected Doc checkAndExtractEntryFromCompressDoc(Repos repos, Doc rootDoc, Doc doc) 
 	{
+		Log.debug("\n");
 		Log.debug("checkAndExtractEntryFromCompressDoc() rootDoc:" + rootDoc.getLocalRootPath() + rootDoc.getPath() + rootDoc.getName());
-		Log.debug("checkAndExtractEntryFromCompressDoc() doc:" + doc.getLocalRootPath() + doc.getPath() + doc.getName());
+		Log.debug("checkAndExtractEntryFromCompressDoc() doc:" +  doc.getLocalRootPath() + doc.getPath() + doc.getName());
+		if(rootDoc.getName() == null || rootDoc.getName().isEmpty())
+		{
+			Log.error("checkAndExtractEntryFromCompressDoc() rootDoc.name 不能为空");			
+			return null;
+		}
+
 		Doc parentCompressDoc = getParentCompressDoc(repos, rootDoc, doc);
+		if(parentCompressDoc == null)
+		{
+			Log.error("checkAndExtractEntryFromCompressDoc() getParentCompressDoc 异常");
+			return null;
+		}
+		
+		Log.debug("checkAndExtractEntryFromCompressDoc() parentCompressDoc:" + parentCompressDoc.getLocalRootPath() + parentCompressDoc.getPath() + parentCompressDoc.getName());
 		if(parentCompressDoc.getDocId().equals(rootDoc.getDocId()))
 		{	
 			//如果doc的parentCompressDoc是rootDoc，那么直接从rootDoc解压出doc
@@ -13598,13 +13766,22 @@ public class BaseController  extends BaseFunction{
 			File parentFile = new File(parentCompressDoc.getLocalRootPath() + parentCompressDoc.getPath() + parentCompressDoc.getName());
 			if(parentFile.exists() == false)
 			{
+				Log.debug("checkAndExtractEntryFromCompressDoc() parentCompressDoc 不存在，call checkAndExtractEntryFromCompressDoc");
 				//此时无法区分该parentCompressDoc是否是目录，只能将其解压出来，然后让extractEntryFromCompressFile来找到真正的parentCompressDoc
 				checkAndExtractEntryFromCompressDoc(repos, rootDoc, parentCompressDoc);				
 			}
-			else if(parentFile.isDirectory())
+			else 
 			{
-				//表明parentCompressDoc是目录，因此需要继续向上找到真正的parentCompressDoc
-				parentCompressDoc = checkAndExtractEntryFromCompressDoc(repos, rootDoc, parentCompressDoc);
+				if(parentFile.isDirectory())
+				{
+					//表明parentCompressDoc是目录，因此需要继续向上找到真正的parentCompressDoc
+					Log.debug("checkAndExtractEntryFromCompressDoc() parentCompressDoc 是目录");
+					parentCompressDoc = checkAndExtractEntryFromCompressDoc(repos, rootDoc, parentCompressDoc);
+				}
+				else
+				{
+					Log.debug("checkAndExtractEntryFromCompressDoc() parentCompressDoc 是压缩文件");					
+				}
 			}
 		}
 		
@@ -13615,13 +13792,17 @@ public class BaseController  extends BaseFunction{
 	
 	private boolean extractEntryFromCompressFile(Repos repos, Doc rootDoc, Doc parentCompressDoc, Doc doc) 
 	{
+		Log.debug("extractEntryFromCompressFile() parentCompressDoc:" + parentCompressDoc.getLocalRootPath() + parentCompressDoc.getPath() + parentCompressDoc.getName());
+		Log.debug("extractEntryFromCompressFile() doc:" + doc.getLocalRootPath() + doc.getPath() + doc.getName());
+		
 		parentCompressDoc = checkAndGetRealParentCompressDoc(repos, rootDoc, parentCompressDoc);
 		if(parentCompressDoc == null)
 		{
-			Log.debug("extractEntryFromCompressFile() " + parentCompressDoc + " is null");
+			Log.debug("extractEntryFromCompressFile() real parentCompressDoc is null");
 			return false;
 		}
 		
+		Log.debug("extractEntryFromCompressFile() real parentCompressDoc:" + parentCompressDoc.getLocalRootPath() + parentCompressDoc.getPath() + parentCompressDoc.getName());
 		String compressFileType = FileUtil.getCompressFileType(parentCompressDoc.getName());
 		if(compressFileType == null)
 		{
@@ -13633,11 +13814,15 @@ public class BaseController  extends BaseFunction{
 		{
 		case "zip":
 		case "war":
-			return extractEntryFromZipFile(parentCompressDoc, doc);
-		case "rar":
-			return extractEntryFromCompressFile(parentCompressDoc, doc);			
+			if(extractEntryFrom7zFile(parentCompressDoc, doc) == false)
+			{
+				return extractEntryFromZipFile(parentCompressDoc, doc);
+			}
+			return true;
 		case "7z":
 			return extractEntryFrom7zFile(parentCompressDoc, doc);			
+		case "rar":
+			return extractEntryFromCompressFile(parentCompressDoc, doc);			
 		case "tar":
 			return extractEntryFromTarFile(parentCompressDoc, doc);
 		case "tgz":
@@ -13665,14 +13850,14 @@ public class BaseController  extends BaseFunction{
 		File parentFile = new File(parentCompressDoc.getLocalRootPath() + parentCompressDoc.getPath() + parentCompressDoc.getName());
 		if(parentFile.exists() == false)
 		{
-			Log.debug("extractEntryFromCompressFile() parentCompressDoc 不存在！");
-			Log.printObject("extractEntryFromCompressFile() parentCompressDoc:",parentCompressDoc);
+			Log.debug("checkAndGetRealParentCompressDoc() parentCompressDoc 不存在！");
+			Log.printObject("checkAndGetRealParentCompressDoc() parentCompressDoc:",parentCompressDoc);
 			return null;
 		}
 		
 		if(parentFile.isDirectory())
 		{
-			Log.debug("extractEntryFromCompressFile() parentCompressDoc 是目录，向上层查找realParentCompressDoc！");
+			Log.debug("checkAndGetRealParentCompressDoc() parentCompressDoc 是目录，向上层查找realParentCompressDoc！");
 			Doc parentParentCompressDoc = getParentCompressDoc(repos, rootDoc, parentCompressDoc);
 			return checkAndGetRealParentCompressDoc(repos, rootDoc, parentParentCompressDoc);
 		}
@@ -13719,7 +13904,7 @@ public class BaseController  extends BaseFunction{
             fos.flush();
             ret = true;
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(fis != null){
@@ -13732,7 +13917,7 @@ public class BaseController  extends BaseFunction{
                     bis.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
 		return ret;
@@ -13779,7 +13964,7 @@ public class BaseController  extends BaseFunction{
             out.flush();
             ret = true;
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(out != null){
@@ -13792,7 +13977,7 @@ public class BaseController  extends BaseFunction{
                     fileInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
 		return ret;
@@ -13838,7 +14023,7 @@ public class BaseController  extends BaseFunction{
             out.flush();
             ret = true;
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(out != null){
@@ -13851,7 +14036,7 @@ public class BaseController  extends BaseFunction{
                     fileInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
         return ret;
@@ -13919,7 +14104,7 @@ public class BaseController  extends BaseFunction{
             	}
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(fis != null){
@@ -13935,7 +14120,7 @@ public class BaseController  extends BaseFunction{
                     tis.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
 		return ret;
@@ -14006,7 +14191,7 @@ public class BaseController  extends BaseFunction{
             	}
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(out != null){
@@ -14025,7 +14210,7 @@ public class BaseController  extends BaseFunction{
                     fileInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
         return ret;
@@ -14098,7 +14283,7 @@ public class BaseController  extends BaseFunction{
             	}
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(out != null){
@@ -14117,7 +14302,7 @@ public class BaseController  extends BaseFunction{
                     fileInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
 		return ret;
@@ -14188,7 +14373,7 @@ public class BaseController  extends BaseFunction{
             	}
             }
         } catch (IOException e) {
-           e.printStackTrace();
+           Log.info(e);
         }finally {
             try {
                 if(fis != null){
@@ -14201,7 +14386,7 @@ public class BaseController  extends BaseFunction{
                     tarInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
 		return ret;
@@ -14262,7 +14447,7 @@ public class BaseController  extends BaseFunction{
             	}
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(sevenZFile != null){
@@ -14272,7 +14457,7 @@ public class BaseController  extends BaseFunction{
                     outputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
 		return ret;
@@ -14413,7 +14598,7 @@ public class BaseController  extends BaseFunction{
             	}
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.info(e);
         }finally {
             try {
                 if(archive != null){
@@ -14423,7 +14608,7 @@ public class BaseController  extends BaseFunction{
                     outputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.info(e);
             }
         }
         return ret;
@@ -14440,14 +14625,14 @@ public class BaseController  extends BaseFunction{
 			ZipEntry entry = parentZipFile.getEntry(relativePath + zipDoc.getName());
 			if(entry == null)
 			{
-				Log.debug("extractZipFile() " + relativePath + zipDoc.getName() + " not exists in zipFile:" + parentZipDoc.getLocalRootPath() + parentZipDoc.getPath() + parentZipDoc.getName());
+				Log.debug("extractEntryFromZipFile() " + relativePath + zipDoc.getName() + " not exists in zipFile:" + parentZipDoc.getLocalRootPath() + parentZipDoc.getPath() + parentZipDoc.getName());
 				return false;
 			}
 			
 			//注意即使是目录也要生成目录，因为该目录将是用来区分名字压缩尾缀的目录和真正的压缩文件
 			if(entry.isDirectory())
 			{
-				Log.debug("extractZipFile() " + relativePath + zipDoc.getName() + " is Directory in zipFile:" + parentZipDoc.getLocalRootPath() + parentZipDoc.getPath() + parentZipDoc.getName());
+				Log.debug("extractEntryFromZipFile() " + relativePath + zipDoc.getName() + " is Directory in zipFile:" + parentZipDoc.getLocalRootPath() + parentZipDoc.getPath() + parentZipDoc.getName());
 				File dir = new File(zipDoc.getLocalRootPath() + zipDoc.getPath() + zipDoc.getName());
 				return dir.mkdirs();
 			}
@@ -14460,14 +14645,14 @@ public class BaseController  extends BaseFunction{
 			
 			ret = dumpZipEntryToFile(parentZipFile, entry, zipDoc.getLocalRootPath() + zipDoc.getPath() + zipDoc.getName());
 		} catch (IOException e) {
-			e.printStackTrace();
+			Log.info(e);
 		} finally {
 			if(parentZipFile != null)
 			{
 				try {
 					parentZipFile.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
 		}		
@@ -14529,7 +14714,7 @@ public class BaseController  extends BaseFunction{
 	      zipFile.close(); 
 	      ret = true;
 	    }catch(IOException ioe){ 
-	      ioe.printStackTrace(); 
+	      Log.info(ioe); 
 	    }finally{ 
 	       try{ 
 	       if(bos != null){ 
@@ -14545,7 +14730,7 @@ public class BaseController  extends BaseFunction{
 	         zipFile.close(); 
 	       } 
 	       }catch(Exception e) { 
-	         e.printStackTrace(); 
+	         Log.info(e); 
 	       } 
 	    } 
 	    return ret;
@@ -14553,13 +14738,19 @@ public class BaseController  extends BaseFunction{
 
 	//获取doc的parentZipDoc(这里有风险parentZipDoc里面的目录的名字带压缩后缀)
 	private Doc getParentCompressDoc(Repos repos, Doc rootDoc, Doc doc) {
+		Log.debug("getParentCompressDoc() doc:" + doc.getPath() + doc.getName());
+		if(doc.getName() == null || doc.getName().isEmpty())
+		{
+			Log.error("getParentCompressDoc() doc.name 不能为空");
+			return null;
+		}
 		
 		Doc parentDoc = buildBasicDoc(repos.getId(), null, doc.getPid(), rootDoc.getReposPath(), doc.getPath(), "", null, 1, true, null, null, 0L, "");
 		if(parentDoc.getDocId().equals(rootDoc.getDocId()))
 		{
 			return rootDoc;
 		}
-		
+				
 		String tmpLocalRootPath = Path.getReposTmpPathForDoc(repos, parentDoc);	
 		parentDoc.setLocalRootPath(tmpLocalRootPath);
 		
@@ -14605,14 +14796,14 @@ public class BaseController  extends BaseFunction{
 			}
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		} finally {
 			if(fileOutputStream != null)
 			{
 				try {
 					fileOutputStream.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
 			if(inputStream != null)
@@ -14620,7 +14811,7 @@ public class BaseController  extends BaseFunction{
 				try {
 					inputStream.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
 		}
@@ -14721,9 +14912,9 @@ public class BaseController  extends BaseFunction{
 						param.put(fieldName, val+"");
 					}
 	            } catch (IllegalArgumentException e) {
-					e.printStackTrace();
+					Log.info(e);
 				} catch (IllegalAccessException e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
         }
@@ -14832,6 +15023,20 @@ public class BaseController  extends BaseFunction{
 		if(session == null) 
 		{
 			session = doRemoteStorageLogin(repos, remote);
+	        if(session == null)
+	        {
+	        	//再尝试三次
+	        	for(int i=0; i < 3; i++)
+	        	{
+	        		//Try Again
+	        		session = doRemoteStorageLogin(repos, remote);
+	        		if(session != null)
+	        		{
+	        			break;
+	        		}
+	        	}
+	        }
+	        
         	if(session == null)
         	{
         		return null;
@@ -14853,6 +15058,20 @@ public class BaseController  extends BaseFunction{
 		if(session == null) 
 		{
 			session = doRemoteStorageLogin(repos, remote);
+	        if(session == null)
+	        {
+	        	//再尝试三次
+	        	for(int i=0; i < 3; i++)
+	        	{
+	        		//Try Again
+	        		session = doRemoteStorageLogin(repos, remote);
+	        		if(session != null)
+	        		{
+	        			break;
+	        		}
+	        	}
+	        }
+			
 			if(session == null)
         	{
         		return null;
@@ -15174,7 +15393,7 @@ public class BaseController  extends BaseFunction{
 	
 	private static RemoteStorageSession remoteStorageLoginForFtp(Repos repos, RemoteStorageConfig remote,
 			RemoteStorageSession session) {
-    	FtpUtil ftp = new FtpUtil(remote.FTP.userName, remote.FTP.pwd, remote.FTP.host, remote.FTP.port, remote.FTP.charset);
+    	FtpUtil ftp = new FtpUtil(remote.FTP.userName, remote.FTP.pwd, remote.FTP.host, remote.FTP.port, remote.FTP.charset, remote.FTP.isPassive);
         if(ftp.login() == false)
         {
         	Log.debug("doRemoteStorageLogin login failed");
@@ -15414,8 +15633,14 @@ public class BaseController  extends BaseFunction{
 		DocChangeType remoteChangeType = getRemoteDocChangeType(dbDoc, remoteDoc);
 		
 		//远程没有改动（如果不是强制手动推送，那么只能推送新增的文件或目录）
-		if(remoteChangeType == DocChangeType.NOCHANGE)
+		if(remoteChangeType == DocChangeType.NOCHANGE || remoteChangeType == DocChangeType.REMOTEDELETE)
 		{
+			if(remoteChangeType == DocChangeType.REMOTEDELETE)
+			{
+				//获取真实的localChangeType
+				localChangeType = getLocalDocChangeTypeWithRemoteDoc(localDoc, remoteDoc);
+			}
+			
 			//本地有改动
 			if(localChangeType != DocChangeType.NOCHANGE)
 			{
@@ -15425,7 +15650,7 @@ public class BaseController  extends BaseFunction{
 					ret = remoteStoragePushEntry(session, remote, repos, localDoc, dbDoc, localDoc, remoteDoc, accessUser, pushResult, localChangeType, actionList, isSubAction);
 				}
 				else 
-				{	
+				{
 					if(force == true && isAutoPush == false)
 					{
 						if(localChangeType == DocChangeType.LOCALCHANGE)
@@ -15467,13 +15692,13 @@ public class BaseController  extends BaseFunction{
 			//pushSubEntries
 			if(ret == true && localDoc != null && localDoc.getType() != null && localDoc.getType() == 2)
 			{
-				if(pushResult.action != null)	//it is new added dir
+				CommitAction action = pushResult.action;
+				if(action != null)	//it is new added dir
 				{
 					ArrayList<CommitAction> subActionList = new ArrayList<CommitAction>();
 					doPushSubEntriesToRemoteStorage(session, remote, repos, localDoc, accessUser, subEntryPushFlag, force, isAutoPush, pushResult, subActionList, true, pushLocalChangeOnly);	
 					if(subActionList.size() > 0)
 					{
-						CommitAction action = pushResult.action;
 						action.setSubActionList(subActionList);
 					}
 				}
@@ -15488,7 +15713,7 @@ public class BaseController  extends BaseFunction{
 		//远程改动（只有强制手动推送时才推送）
 		if(force == true && isAutoPush == false)
 		{
-			if(pushLocalChangeOnly && localChangeType == DocChangeType.NOCHANGE)
+			if(pushLocalChangeOnly && remote.isVerRepos == false && localChangeType == DocChangeType.NOCHANGE)
 			{
 				Log.debug("doPushEntryToRemoteStorage " +doc.getPath() + doc.getName()+ " 远程改动, 本地未改动, 只推送本地改动，不推送");				
 				return true;
@@ -15537,13 +15762,13 @@ public class BaseController  extends BaseFunction{
 			
 			if(ret == true && localDoc != null && localDoc.getType() != null && localDoc.getType() == 2)
 			{
-				if(pushResult.action != null)	//it is new add dir
+				CommitAction action = pushResult.action;
+				if(action != null)	//it is new add dir
 				{
 					ArrayList<CommitAction> subActionList = new ArrayList<CommitAction>();
 					doPushSubEntriesToRemoteStorage(session, remote, repos, localDoc, accessUser, subEntryPushFlag, force, isAutoPush, pushResult, subActionList, true, pushLocalChangeOnly);	
 					if(subActionList.size() > 0)
 					{
-						CommitAction action = pushResult.action;
 						action.setSubActionList(subActionList);
 					}
 				}
@@ -15756,12 +15981,16 @@ public class BaseController  extends BaseFunction{
 		pushResult.totalCount ++;
 
 		ret = deleteEntryFromRemoteStorage(session, remote, repos, remoteDoc, pushResult, actionList, ret);
-		if(ret == true && remote.isVerRepos == false)
+		if(ret == true)
 		{
-			pushResult.successCount ++;	
-			if(dbDoc != null)
-			{
-				deleteRemoteStorageDBEntry(repos, doc, remote);
+			//版本仓库还需要commit，这里不是标志成功的地方
+			if(remote.isVerRepos == false)
+			{			
+				pushResult.successCount ++;	
+				if(dbDoc != null)
+				{
+					deleteRemoteStorageDBEntry(repos, doc, remote);
+				}
 			}
 		}
 		else
@@ -15868,28 +16097,36 @@ public class BaseController  extends BaseFunction{
 		pushResult.totalCount ++;
 
 		ret = uploadFileToRemoteStorage(session, remote, repos, doc, pushResult, actionList, ret);
-		if(ret == true && remote.isVerRepos == false)
+		if(ret == true)
 		{
-			//获取并更新remoteDoc Info
-			Doc newRemoteDoc = remoteStorageGetEntry(session, remote, repos, doc, null);
-			if(newRemoteDoc != null && newRemoteDoc.getType() != 0)
-			{
-				pushResult.successCount ++;
-
-				
-				doc.setRevision(newRemoteDoc.getRevision());
-				if(dbDoc == null)
+			//版本仓库还需要commit，这里不是标志成功的地方
+			if(remote.isVerRepos == false)
+			{			
+				//获取并更新remoteDoc Info
+				Doc newRemoteDoc = remoteStorageGetEntry(session, remote, repos, doc, null);
+				if(newRemoteDoc != null && newRemoteDoc.getType() != 0)
 				{
-					addRemoteStorageDBEntry(repos, doc, remote);
+					pushResult.successCount ++;
+	
+					
+					doc.setRevision(newRemoteDoc.getRevision());
+					if(dbDoc == null)
+					{
+						addRemoteStorageDBEntry(repos, doc, remote);
+					}
+					else
+					{
+						updateRemoteStorageDBEntry(repos, doc, remote);
+					}
 				}
 				else
 				{
-					updateRemoteStorageDBEntry(repos, doc, remote);
+					pushResult.failCount ++;					
 				}
 			}
 			else
 			{
-				pushResult.failCount ++;					
+				pushResult.successCount ++;
 			}
 		}
 		else
@@ -15906,27 +16143,35 @@ public class BaseController  extends BaseFunction{
 
 		
 		ret = addFileToRemoteStorage(session, remote, repos, doc, pushResult, actionList, ret);
-		if(ret == true && remote.isVerRepos == false)
+		if(ret == true)
 		{
-			//获取并更新remoteDoc Info
-			Doc newRemoteDoc = remoteStorageGetEntry(session, remote, repos, doc, null);
-			if(newRemoteDoc != null && newRemoteDoc.getType() != 0)
+			//版本仓库还需要commit，这里不是标志成功的地方
+			if(remote.isVerRepos == false)
 			{
-				pushResult.successCount ++;
-
-				doc.setRevision(newRemoteDoc.getRevision());
-				if(dbDoc == null)
+				//获取并更新remoteDoc Info
+				Doc newRemoteDoc = remoteStorageGetEntry(session, remote, repos, doc, null);
+				if(newRemoteDoc != null && newRemoteDoc.getType() != 0)
 				{
-					addRemoteStorageDBEntry(repos, doc, remote);
+					pushResult.successCount ++;
+	
+					doc.setRevision(newRemoteDoc.getRevision());
+					if(dbDoc == null)
+					{
+						addRemoteStorageDBEntry(repos, doc, remote);
+					}
+					else
+					{
+						updateRemoteStorageDBEntry(repos, doc, remote);
+					}
 				}
 				else
 				{
-					updateRemoteStorageDBEntry(repos, doc, remote);
+					pushResult.failCount ++;					
 				}
 			}
 			else
 			{
-				pushResult.failCount ++;					
+				pushResult.successCount ++;
 			}
 		}
 		else
@@ -15943,26 +16188,34 @@ public class BaseController  extends BaseFunction{
 		pushResult.totalCount ++;
 
 		ret = addDirToRemoteStorage(session, remote, repos, doc, pushResult, actionList, isSubAction);
-		if(ret == true && remote.isVerRepos == false)
+		if(ret == true)
 		{
-			//获取并更新remoteDoc Info
-			Doc newRemoteDoc = remoteStorageGetEntry(session, remote, repos, doc, null);
-			if(newRemoteDoc != null && newRemoteDoc.getType() != 0)
+			//版本仓库还需要commit，这里不是标志成功的地方
+			if(remote.isVerRepos == false)
 			{
-				pushResult.successCount ++;
-				doc.setRevision(newRemoteDoc.getRevision());
-				if(dbDoc == null)
+				//获取并更新remoteDoc Info
+				Doc newRemoteDoc = remoteStorageGetEntry(session, remote, repos, doc, null);
+				if(newRemoteDoc != null && newRemoteDoc.getType() != 0)
 				{
-					addRemoteStorageDBEntry(repos, doc, remote);
+					pushResult.successCount ++;
+					doc.setRevision(newRemoteDoc.getRevision());
+					if(dbDoc == null)
+					{
+						addRemoteStorageDBEntry(repos, doc, remote);
+					}
+					else
+					{
+						updateRemoteStorageDBEntry(repos, doc, remote);
+					}
 				}
 				else
 				{
-					updateRemoteStorageDBEntry(repos, doc, remote);
+					pushResult.failCount ++;					
 				}
 			}
 			else
 			{
-				pushResult.failCount ++;					
+				pushResult.successCount ++;
 			}
 		}
 		else
@@ -16079,7 +16332,7 @@ public class BaseController  extends BaseFunction{
 			pushResult.revision = session.git.doCopy(srcRemotePath, srcName, dstRemotePath, dstName, commitMsg, commitUser, isMove);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16091,7 +16344,7 @@ public class BaseController  extends BaseFunction{
 			pushResult.revision = session.svn.doCopy(srcRemotePath, srcName, dstRemotePath, dstName, commitMsg, commitUser, isMove);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16109,7 +16362,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = session.smb.copy(srcRemotePath, srcName, dstRemotePath, dstName, isMove, type);			
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16121,7 +16374,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = session.ftp.copy(srcRemotePath, srcName, dstRemotePath, dstName, isMove, type);			
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16133,7 +16386,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = session.sftp.copy(srcRemotePath, srcName, dstRemotePath, dstName, isMove, type);
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16152,7 +16405,7 @@ public class BaseController  extends BaseFunction{
 				ret = FileUtil.copyFileOrDir(remote.FILE.localRootPath + srcRemotePath + srcName, remote.FILE.localRootPath + dstRemotePath + dstName, false);				
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16290,8 +16543,7 @@ public class BaseController  extends BaseFunction{
 	}
 	
 	//这个函数只是添加远程目录
-	protected static boolean addDirsToRemoteStorage(RemoteStorageSession session, RemoteStorageConfig remote, String basePath, String offsetPath) {
-		
+	protected static boolean addDirsToRemoteStorage(RemoteStorageSession session, RemoteStorageConfig remote, String basePath, String offsetPath, String commitMsg, String commitUser) {
 		String remotePath = basePath;
 		String path[] = offsetPath.split("/");
 		for(int i=0; i<path.length; i++)
@@ -16319,11 +16571,13 @@ public class BaseController  extends BaseFunction{
 			case "mxsdoc":
 				addDirToMxsDocServer(session, remote, remotePath, path[i]);
 				break;
-			//svn和git会自动添加parentDir所以不需要添加
-			//case "svn":
-			//	return addDirsToSvnServer(session, remote, remotePath, path[i]);
-			//case "git":
+			case "svn":
+				addDirToSvnServer(session, remote, remotePath, path[i], commitMsg, commitUser);
+				break;
+			//git会不跟踪目录节点，因此不需要处理
+			case "git":
 			//	return addDirsToGitServer(session, remote, remotePath, path[i]);
+				return true;
 			default:
 				Log.debug("addDirsToRemoteStorage unknown remoteStorage protocol:" + remote.protocol);
 				return false;
@@ -16377,7 +16631,7 @@ public class BaseController  extends BaseFunction{
 			session.svn.modifyFile(doc, isSubAction, commitActionList);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16388,7 +16642,7 @@ public class BaseController  extends BaseFunction{
 			session.git.modifyFile(doc, isSubAction, commitActionList);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16400,7 +16654,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = FileUtil.copyFile(remote.FILE.localRootPath + remotePath + fileName, localPath + fileName, true);
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16412,7 +16666,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = session.sftp.download(remotePath, localPath, fileName);			
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16424,7 +16678,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = session.ftp.download(remotePath, localPath, fileName);			
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16437,7 +16691,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = session.smb.download(remotePath, localPath, fileName);			
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16449,7 +16703,7 @@ public class BaseController  extends BaseFunction{
 		try {
  			ret = session.mxsdoc.download(remotePath, localPath, fileName);			
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16465,7 +16719,7 @@ public class BaseController  extends BaseFunction{
 			session.svn.getRemoteFile(remotePath + fileName, localPath, fileName, revision, true);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16476,7 +16730,7 @@ public class BaseController  extends BaseFunction{
 			session.git.getRemoteFile(remotePath + fileName, localPath, fileName, commitId, true);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16490,7 +16744,7 @@ public class BaseController  extends BaseFunction{
 			File dir = new File(remote.FILE.localRootPath + remotePath + fileName);
 			ret = dir.mkdir();
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16502,7 +16756,7 @@ public class BaseController  extends BaseFunction{
 		try {
 			ret = session.sftp.mkdir(remotePath + fileName); 
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16514,7 +16768,7 @@ public class BaseController  extends BaseFunction{
 		try {
 			ret = session.ftp.mkdir(remotePath + fileName); 
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16526,7 +16780,7 @@ public class BaseController  extends BaseFunction{
 		try {
 			ret = session.smb.mkdir(remotePath + fileName); 
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16538,7 +16792,18 @@ public class BaseController  extends BaseFunction{
 		try {
 			ret = session.mxsdoc.add(remotePath, fileName, 2); 	
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
+		}
+        return ret;
+	}
+	
+	private static boolean addDirToSvnServer(RemoteStorageSession session, RemoteStorageConfig remote, String remotePath, String name, String commitMsg, String commitUser) {
+		boolean ret = false;
+		try {
+			session.svn.mkdir(remotePath, name, commitMsg, commitUser);
+			ret = true;
+		} catch (Exception e) {
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16549,7 +16814,7 @@ public class BaseController  extends BaseFunction{
 			session.svn.addEntry(doc, isSubAction, commitActionList);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16560,7 +16825,7 @@ public class BaseController  extends BaseFunction{
 			session.git.addEntry(doc, isSubAction, commitActionList);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16573,7 +16838,7 @@ public class BaseController  extends BaseFunction{
 			pushResult.action = action;
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16586,7 +16851,7 @@ public class BaseController  extends BaseFunction{
 			pushResult.action = action;
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16599,7 +16864,7 @@ public class BaseController  extends BaseFunction{
 		try {
 			ret = FileUtil.delFileOrDir(remote.FILE.localRootPath + remotePath + fileName);
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 
@@ -16619,7 +16884,7 @@ public class BaseController  extends BaseFunction{
 				ret = session.sftp.delDirs(remotePath, fileName);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16639,7 +16904,7 @@ public class BaseController  extends BaseFunction{
 				ret = session.ftp.delDirs(remotePath, fileName);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16658,7 +16923,7 @@ public class BaseController  extends BaseFunction{
 				ret = session.smb.delDir(remotePath, fileName);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16670,7 +16935,7 @@ public class BaseController  extends BaseFunction{
 		try {
 			ret = session.mxsdoc.delete(remotePath, fileName); 
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16681,7 +16946,7 @@ public class BaseController  extends BaseFunction{
 			session.svn.deleteEntry(doc, isSubAction, commitActionList);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16692,7 +16957,7 @@ public class BaseController  extends BaseFunction{
 			session.git.deleteEntry(doc, isSubAction, commitActionList);
 			ret = true;
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16704,7 +16969,7 @@ public class BaseController  extends BaseFunction{
 		try {
 			ret = FileUtil.copyFile(localPath + fileName, remote.FILE.localRootPath + remotePath + fileName, true);
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return ret;
 	}
@@ -16719,14 +16984,14 @@ public class BaseController  extends BaseFunction{
         	is = new FileInputStream(localPath + fileName);
         	ret = session.sftp.upload(remotePath, fileName, is);   
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		} finally {
 			if(is != null)
 			{
 				try {
 					is.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
 		}
@@ -16744,14 +17009,14 @@ public class BaseController  extends BaseFunction{
         	is = new FileInputStream(localPath + fileName);
         	ret = session.ftp.upload(remotePath, fileName, is);        	
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		} finally {
 			if(is != null)
 			{
 				try {
 					is.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
 		}
@@ -16769,14 +17034,14 @@ public class BaseController  extends BaseFunction{
         	is = new FileInputStream(localPath + fileName);
         	ret = session.smb.upload(remotePath, fileName, is);        	
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		} finally {
 			if(is != null)
 			{
 				try {
 					is.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.info(e);
 				}
 			}
 		}
@@ -16832,7 +17097,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}		
         return subEntryList;
 	}
@@ -16879,7 +17144,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}	
         return subEntryList;
 	}
@@ -16933,7 +17198,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}		
         return subEntryList;
 	}
@@ -16987,7 +17252,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}		
         return subEntryList;
 	}
@@ -17047,7 +17312,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}		
         return subEntryList;
 	}
@@ -17094,7 +17359,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}		
         return subEntryList;
 	}
@@ -17145,7 +17410,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}		
         return subEntryList;
 	}
@@ -17184,7 +17449,7 @@ public class BaseController  extends BaseFunction{
 			    remoteDoc.setRevision(subEntryRevision);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return remoteDoc;	
     }
@@ -17237,7 +17502,7 @@ public class BaseController  extends BaseFunction{
 		    	}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return subEntryList;
 	}
@@ -17292,7 +17557,7 @@ public class BaseController  extends BaseFunction{
 			    }	
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return subEntryList;
 	}
@@ -17343,7 +17608,7 @@ public class BaseController  extends BaseFunction{
 	    		subEntryList.put(subDoc.getName(), subDoc);
 			}			
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return subEntryList;
 	}
@@ -17396,7 +17661,7 @@ public class BaseController  extends BaseFunction{
 				}		
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return subEntryList;
 	}
@@ -17449,7 +17714,7 @@ public class BaseController  extends BaseFunction{
 				}		
 			}	
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return subEntryList;
 	}
@@ -17476,30 +17741,33 @@ public class BaseController  extends BaseFunction{
         	Log.debug("getRemoteStorageEntryHashMapForGit fileRemotePath:" + fileRemotePath);
             
 			TreeWalk treeWalk = session.git.listFiles(fileRemotePath, commitId);
-			//Log.printObject("list:", list);
-			while(treeWalk.next())
-	    	{
-	    		int type = getEntryType(treeWalk.getFileMode(0));
-		    	if(type <= 0)
+			if(treeWalk != null)
+			{
+				//Log.printObject("list:", list);
+				while(treeWalk.next())
 		    	{
-		    		continue;
+		    		int type = getEntryType(treeWalk.getFileMode(0));
+			    	if(type <= 0)
+			    	{
+			    		continue;
+			    	}
+			    	
+		    		String name = treeWalk.getNameString();            			
+		    		Doc subDoc = new Doc();
+		    		subDoc.setVid(repos.getId());
+		    		subDoc.setDocId(Path.buildDocIdByName(subDocLevel,subDocParentPath,name));
+		    		subDoc.setPid(doc.getDocId());
+		    		subDoc.setPath(subDocParentPath);
+		    		subDoc.setName(name);
+		    		subDoc.setLevel(subDocLevel);
+		    		subDoc.setType(type);
+		    		subDoc.setLocalRootPath(doc.getLocalRootPath());
+		    		subDoc.setLocalVRootPath(doc.getLocalVRootPath());
+		    		subEntryList.put(subDoc.getName(), subDoc);
 		    	}
-		    	
-	    		String name = treeWalk.getNameString();            			
-	    		Doc subDoc = new Doc();
-	    		subDoc.setVid(repos.getId());
-	    		subDoc.setDocId(Path.buildDocIdByName(subDocLevel,subDocParentPath,name));
-	    		subDoc.setPid(doc.getDocId());
-	    		subDoc.setPath(subDocParentPath);
-	    		subDoc.setName(name);
-	    		subDoc.setLevel(subDocLevel);
-	    		subDoc.setType(type);
-	    		subDoc.setLocalRootPath(doc.getLocalRootPath());
-	    		subDoc.setLocalVRootPath(doc.getLocalVRootPath());
-	    		subEntryList.put(subDoc.getName(), subDoc);
-	    	}
+			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return subEntryList;
 	}
@@ -17552,7 +17820,7 @@ public class BaseController  extends BaseFunction{
 		        subEntryList.put(subDoc.getName(), subDoc);
 		    }	
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return subEntryList;
 	}
@@ -17659,7 +17927,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return remoteDoc;
 	}
@@ -17712,7 +17980,7 @@ public class BaseController  extends BaseFunction{
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return remoteDoc;
 	}
@@ -17758,7 +18026,7 @@ public class BaseController  extends BaseFunction{
 			    remoteDoc.setRevision(subEntryRevision);
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return remoteDoc;
 	}
@@ -17791,33 +18059,35 @@ public class BaseController  extends BaseFunction{
         	String remoteParentPath = remote.rootPath + doc.offsetPath + doc.getPath();
 
         	Collection<SVNDirEntry> list = session.svn.listFiles(remoteParentPath, commitId);
-			
-    	    Iterator<SVNDirEntry> iterator = list.iterator();
-    	    while (iterator.hasNext()) 
-    	    {
-    	    	SVNDirEntry subEntry = iterator.next();
-    	    	int subEntryType = getEntryType(subEntry.getKind());
-    	    	if(subEntryType <= 0)
-    	    	{
-    	    		continue;
-    	    	}
-    	    	
-    	    	String subEntryName = subEntry.getName();
-    	    	if(subEntryName.equals(doc.getName()))
-    	    	{
-    	    		Long lastChangeTime = subEntry.getDate().getTime();
-    	    		remoteDoc = buildBasicDoc(doc.getVid(), doc.getDocId(), doc.getPid(), doc.getReposPath(), doc.getPath(), doc.getName(), doc.getLevel(), subEntryType, doc.getIsRealDoc(), doc.getLocalRootPath(), doc.getLocalVRootPath(), null, null, doc.offsetPath);
-    	    		remoteDoc.setSize(subEntry.getSize());
-    	    		remoteDoc.setCreateTime(lastChangeTime);
-    	    		remoteDoc.setLatestEditTime(lastChangeTime);
-    	    		remoteDoc.setCreatorName(subEntry.getAuthor());
-    	    		remoteDoc.setLatestEditorName(subEntry.getAuthor());
-    	    		remoteDoc.setRevision(subEntry.getRevision()+"");
-    	    		break;
-    	    	}
+			if(list != null)
+			{
+				Iterator<SVNDirEntry> iterator = list.iterator();
+    	        while (iterator.hasNext()) 
+	    	    {
+	    	    	SVNDirEntry subEntry = iterator.next();
+	    	    	int subEntryType = getEntryType(subEntry.getKind());
+	    	    	if(subEntryType <= 0)
+	    	    	{
+	    	    		continue;
+	    	    	}
+	    	    	
+	    	    	String subEntryName = subEntry.getName();
+	    	    	if(subEntryName.equals(doc.getName()))
+	    	    	{
+	    	    		Long lastChangeTime = subEntry.getDate().getTime();
+	    	    		remoteDoc = buildBasicDoc(doc.getVid(), doc.getDocId(), doc.getPid(), doc.getReposPath(), doc.getPath(), doc.getName(), doc.getLevel(), subEntryType, doc.getIsRealDoc(), doc.getLocalRootPath(), doc.getLocalVRootPath(), null, null, doc.offsetPath);
+	    	    		remoteDoc.setSize(subEntry.getSize());
+	    	    		remoteDoc.setCreateTime(lastChangeTime);
+	    	    		remoteDoc.setLatestEditTime(lastChangeTime);
+	    	    		remoteDoc.setCreatorName(subEntry.getAuthor());
+	    	    		remoteDoc.setLatestEditorName(subEntry.getAuthor());
+	    	    		remoteDoc.setRevision(subEntry.getRevision()+"");
+	    	    		break;
+	    	    	}
+	    	    }
     	    }
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return remoteDoc;
 	}
@@ -17887,7 +18157,7 @@ public class BaseController  extends BaseFunction{
             remoteDoc.setLatestEditorName(commitUser);
             remoteDoc.setLatestEditTime(commitTime);
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
         return remoteDoc;
 	}
@@ -17945,7 +18215,7 @@ public class BaseController  extends BaseFunction{
 				return 1;
 			}
 		} catch (SmbException e) {
-			e.printStackTrace();
+			Log.info(e);
 		}
 		return 0;
 	}
@@ -17980,7 +18250,7 @@ public class BaseController  extends BaseFunction{
 	}
 	
 
-	protected static void remoteStorageVerReposCommitAndPush(RemoteStorageSession session, RemoteStorageConfig remote, Repos repos, String commitUser, String commitMsg, DocPushResult pushResult) {
+	protected static String remoteStorageVerReposCommitAndPush(RemoteStorageSession session, RemoteStorageConfig remote, Repos repos, String commitUser, String commitMsg, DocPushResult pushResult) {
 		String revision = null;
 		switch(session.protocol)
 		{
@@ -17997,6 +18267,7 @@ public class BaseController  extends BaseFunction{
 			updateRemoteStorageDbEntry(remote, repos, pushResult, pushResult.actionList, revision);
 		}
 		pushResult.revision = revision;
+		return revision;
 	}
 	
 	protected static boolean doPullFromRemoteStorage(RemoteStorageSession session, RemoteStorageConfig remote, Repos repos, Doc doc, String commitId, boolean recurcive, boolean force, boolean isAutoPull, ReturnAjax rt) {
@@ -18009,15 +18280,6 @@ public class BaseController  extends BaseFunction{
 		pullResult.successCount = 0;
 		pullResult.successDocList = new ArrayList<Doc>();
 	
-		if(commitId != null)
-		{
-			if(remote.isVerRepos == false)
-			{
-				Log.debug("doPullFromRemoteStorage() 非远程版本仓库不支持历史版本获取！");
-				return false;
-			}					
-		}
-		
 		Doc localDoc = fsGetDoc(repos, doc);
 		Doc dbDoc = getRemoteStorageDBEntry(repos, doc, false, remote);
 		Doc remoteDoc = remoteStorageGetEntry(session, remote, repos, doc, commitId); 
@@ -18060,7 +18322,7 @@ public class BaseController  extends BaseFunction{
 			if(localDoc != null && localDoc.getType() != null && localDoc.getType() != 0)
 			{
 				Log.debug("doPushToRemoteStorage() addDirsToRemoteStorage:" + remote.rootPath + doc.offsetPath + doc.getPath());				
-				addDirsToRemoteStorage(session, remote, remote.rootPath, doc.offsetPath + doc.getPath());
+				addDirsToRemoteStorage(session, remote, remote.rootPath, doc.offsetPath + doc.getPath(), commitMsg,  accessUser.getName());
 			}
 		}
 		
@@ -18076,7 +18338,11 @@ public class BaseController  extends BaseFunction{
 			{
 				if(pushResult.actionList.size() > 0)
 				{
-					remoteStorageVerReposCommitAndPush(session, remote, repos, accessUser.getName(), commitMsg, pushResult); 
+					if(remoteStorageVerReposCommitAndPush(session, remote, repos, accessUser.getName(), commitMsg, pushResult) == null)
+					{
+						pushResult.successCount = 0;
+						pushResult.failCount = pushResult.totalCount;
+					}
 				}
 			}
 			else
@@ -18086,5 +18352,23 @@ public class BaseController  extends BaseFunction{
 		}
 		rt.setDataEx(pushResult);
 		return ret;	
+	}
+	
+	protected JSONObject getSystemInfo() {
+		JSONObject systemInfo = new JSONObject();
+		
+		String defaultReposStorePath = Path.getDefaultReposRootPath(OSType);
+		systemInfo.put("defaultReposStorePath", defaultReposStorePath);
+		
+		String systemLogStorePath = Path.getSystemLogStorePath(OSType);
+		systemInfo.put("systemLogStorePath", systemLogStorePath);
+		
+		String indexDBStorePath = getDBStorePath();
+		systemInfo.put("indexDBStorePath", indexDBStorePath);
+
+		String salesDataStorePath = Path.getSaleDataStorePath(OSType);
+		systemInfo.put("salesDataStorePath", salesDataStorePath);
+		
+		return systemInfo;
 	}
 }

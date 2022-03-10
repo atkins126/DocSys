@@ -35,7 +35,6 @@ import com.DocSystem.common.FileUtil;
 import com.DocSystem.common.Log;
 import com.DocSystem.common.Path;
 import com.DocSystem.common.constants;
-import com.DocSystem.common.entity.EncryptConfig;
 import com.DocSystem.common.entity.QueryResult;
 import com.DocSystem.controller.BaseController;
 
@@ -763,10 +762,9 @@ public class ManageController extends BaseController{
 		String tomcatPath = getTomcatPath();
 		String javaHome = getJavaHome();
 		String officeEditorApi = Path.getOfficeEditorApi();
-		String defaultReposStorePath = Path.getDefaultReposRootPath(OSType);
 		String ldapConfig = getLdapConfig();
 
-		JSONObject config = new JSONObject();
+		JSONObject config = getSystemInfo();
 		config.put("docSysType", docSysType);
 		config.put("isSalesServer", isSalesServer);
 		
@@ -783,7 +781,6 @@ public class ManageController extends BaseController{
 			config.put("openOfficePath", openOfficePath);
 		}
 		config.put("officeEditorApi", officeEditorApi);
-		config.put("defaultReposStorePath", defaultReposStorePath);
 		rt.setData(config);
 		writeJson(rt, response);
 	}
@@ -832,6 +829,9 @@ public class ManageController extends BaseController{
 			String openOfficePath, 
 			String officeEditorApi,
 			String defaultReposStorePath,
+			String systemLogStorePath,
+			String indexDBStorePath,
+			String salesDataStorePath,
 			String ldapConfig,
 			Integer logLevel,
 			String logFile,
@@ -842,6 +842,9 @@ public class ManageController extends BaseController{
 		Log.debug("setSystemInfo() tomcatPath:" + tomcatPath + " javaHome:" + javaHome 
 				+ " openOfficePath:" + openOfficePath + " officeEditorApi:" + officeEditorApi 
 				+ " defaultReposStorePath:" + defaultReposStorePath 
+				+ " systemLogStorePath:" + systemLogStorePath 
+				+ " indexDBStorePath:" + indexDBStorePath 
+				+ " salesDataStorePath:" + salesDataStorePath 
 				+ " ldapConfig:" + ldapConfig + " logLevel:" + logLevel + " logFile:" + logFile);
 		
 		ReturnAjax rt = new ReturnAjax();
@@ -896,12 +899,38 @@ public class ManageController extends BaseController{
 			officeEditorApi.replace("\\", "/");
 			ReadProperties.setValue(tmpDocSystemConfigPath + configFileName, "officeEditorApi", officeEditorApi);
 			setOfficeEditor(officeEditorApi);
+			if(officeEditorApi.isEmpty())
+			{	
+				officeType = 0;
+			}
+			else
+			{
+				officeType = 1;				
+			}
 		}
 		
 		if(defaultReposStorePath != null)
 		{
 			defaultReposStorePath = Path.localDirPathFormat(defaultReposStorePath, OSType);
 			ReadProperties.setValue(tmpDocSystemConfigPath + configFileName, "defaultReposStorePath", defaultReposStorePath);
+		}
+		
+		if(systemLogStorePath != null)
+		{
+			systemLogStorePath = Path.localDirPathFormat(systemLogStorePath, OSType);
+			ReadProperties.setValue(tmpDocSystemConfigPath + configFileName, "SystemLogStorePath", systemLogStorePath);
+		}
+		
+		if(indexDBStorePath != null)
+		{
+			indexDBStorePath = Path.localDirPathFormat(indexDBStorePath, OSType);
+			ReadProperties.setValue(tmpDocSystemConfigPath + configFileName, "DBStorePath", indexDBStorePath);
+		}
+		
+		if(salesDataStorePath != null)
+		{
+			salesDataStorePath = Path.localDirPathFormat(salesDataStorePath, OSType);
+			ReadProperties.setValue(tmpDocSystemConfigPath + configFileName, "SalesDataStorePath", salesDataStorePath);
 		}
 		
 		if(ldapConfig != null && !ldapConfig.isEmpty())
@@ -1280,9 +1309,12 @@ public class ManageController extends BaseController{
 
 			if(login_user.getType().equals(tempUser.getType()))
 			{
-				Log.docSysErrorLog("越权操作：您无权修改同级别用户的设置！", rt);
-				writeJson(rt, response);
-				return;			
+				if(login_user.getId() != 0)	//系统第一个管理员用户拥有最高级权限，可以修改其他超级管理员信息
+				{
+					Log.docSysErrorLog("越权操作：您无权修改同级别用户的设置！", rt);
+					writeJson(rt, response);
+					return;
+				}
 			}
 			
 			//检查用户名是否有改动
@@ -1385,9 +1417,12 @@ public class ManageController extends BaseController{
 			
 			if(tempUser.getType().equals(login_user.getType()))
 			{
-				Log.docSysErrorLog("越权操作：您无权修改同级别用户的密码！", rt);
-				writeJson(rt, response);
-				return;			
+				if(login_user.getId() != 0)	//系统第一个管理员用户拥有最高级权限，可以重置其他超级管理员密码
+				{
+					Log.docSysErrorLog("越权操作：您无权修改同级别用户的密码！", rt);
+					writeJson(rt, response);
+					return;			
+				}
 			}
 		}	
 				
@@ -1461,9 +1496,12 @@ public class ManageController extends BaseController{
 	
 			if(tempUser.getType().equals(login_user.getType()))
 			{
-				Log.docSysErrorLog("越权操作：您无权删除同级别用户！", rt);
-				writeJson(rt, response);
-				return;			
+				if(login_user.getId() != 0)	//系统第一个管理员用户拥有最高级权限，可以删除其他超级管理员
+				{
+					Log.docSysErrorLog("越权操作：您无权删除同级别用户！", rt);
+					writeJson(rt, response);
+					return;			
+				}
 			}		
 		}
 		

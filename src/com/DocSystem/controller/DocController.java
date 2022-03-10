@@ -6,6 +6,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -23,6 +24,7 @@ import javax.servlet.http.HttpSession;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
 import org.apache.commons.compress.archivers.sevenz.SevenZFile;
+import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile;
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.tools.tar.TarEntry;
 import org.apache.tools.tar.TarInputStream;
@@ -70,6 +72,7 @@ import com.DocSystem.common.Log;
 import com.DocSystem.common.OfficeExtract;
 import com.DocSystem.common.Path;
 import com.DocSystem.common.SyncLock;
+import com.DocSystem.common.URLInfo;
 import com.DocSystem.common.CommonAction.Action;
 import com.DocSystem.common.CommonAction.CommonAction;
 import com.DocSystem.common.channels.Channel;
@@ -133,7 +136,7 @@ public class DocController extends BaseController{
 	{
 		Log.info("\n************** addDoc ****************");
 		Log.debug("addDoc reposId:" + reposId + " docId: " + docId + " pid:" + pid + " path:" + path + " name:" + name  + " level:" + level + " type:" + type + " content:" + content+ " shareId:" + shareId);
-		//Log.println(Charset.defaultCharset());
+		Log.debug("addDoc default charset:" + Charset.defaultCharset());
 		
 		ReturnAjax rt = new ReturnAjax();
 		ReposAccess reposAccess = checkAndGetAccessInfo(shareId, session, request, response, reposId, path, name, true, rt);
@@ -409,7 +412,6 @@ public class DocController extends BaseController{
 	{
 		Log.info("\n************** addDocRS ****************");
 		Log.debug("addDocRS reposId:" + reposId + " remoteDirectory:[" + remoteDirectory + "] path:[" + path + "] name:" + name  + " type:" + type + " content:" + " authCode:" + authCode);
-		//Log.println(Charset.defaultCharset());
 		
 		ReturnAjax rt = new ReturnAjax();
 		
@@ -586,7 +588,7 @@ public class DocController extends BaseController{
 		
 		if(ret == false)
 		{
-			Log.println("feeback() addDoc failed");
+			Log.debug("feeback() addDoc failed");
 			return;
 		}
 		
@@ -1306,7 +1308,9 @@ public class DocController extends BaseController{
 		
 		if(UserDocAuth.getUploadSize() != null && UserDocAuth.getUploadSize() < size)
 		{
-			Log.docSysErrorLog("上传文件大小已超限，请联系管理员！", rt);
+			Log.info("checkDocInfo size:" + size + " UserDocAuth max uploadSize:" + UserDocAuth.getUploadSize());
+			String maxUploadSize = getMaxUploadSize(UserDocAuth.getUploadSize());
+			rt.setError("上传文件大小超限[" + maxUploadSize + "]，请联系管理员");
 			writeJson(rt, response);
 			return;
 		}		
@@ -1650,8 +1654,9 @@ public class DocController extends BaseController{
 		
 		if(docUserAuth.getUploadSize() != null && docUserAuth.getUploadSize() < size)
 		{
-			Log.debug("uploadDoc size:" + size + " max uploadSize:" + docUserAuth.getUploadSize());
-			rt.setError("上传文件大小超限，请联系管理员");
+			Log.info("uploadDoc size:" + size + " docUserAuth max uploadSize:" + docUserAuth.getUploadSize());
+			String maxUploadSize = getMaxUploadSize(docUserAuth.getUploadSize());
+			rt.setError("上传文件大小超限[" + maxUploadSize + "]，请联系管理员");
 			writeJson(rt, response);
 			return;							
 		}
@@ -1684,7 +1689,9 @@ public class DocController extends BaseController{
 			
 			if(parentDocUserAuth.getUploadSize() != null && parentDocUserAuth.getUploadSize() < size)
 			{
-				rt.setError("上传文件大小超限，请联系管理员");
+				Log.info("uploadDoc size:" + size + " parentDocUserAuth max uploadSize:" + docUserAuth.getUploadSize());
+				String maxUploadSize = getMaxUploadSize(docUserAuth.getUploadSize());
+				rt.setError("上传文件大小超限[" + maxUploadSize + "]，请联系管理员");
 				writeJson(rt, response);
 				return;							
 			}
@@ -1767,6 +1774,39 @@ public class DocController extends BaseController{
 		addSystemLog(request, reposAccess.getAccessUser(), "uploadDoc", "uploadDoc", "上传文件", "失败",  repos, doc, null, "");	
 	}
 	
+	private String getMaxUploadSize(Long uploadSize) {
+		//字节
+		if(uploadSize < 1024)
+		{
+			return uploadSize + "";
+		}
+		
+		//KB
+		uploadSize = uploadSize/1024;
+		if(uploadSize < 1024)
+		{
+			return uploadSize + "K"; 
+		}
+		
+		//MB
+		uploadSize = uploadSize/1024;
+		if(uploadSize < 1024)
+		{
+			return uploadSize + "M";
+		}
+		
+		//GB
+		uploadSize = uploadSize/1024;
+		if(uploadSize < 1024)
+		{
+			return uploadSize + "G";
+		}
+		
+		//TB
+		uploadSize = uploadSize/1024;
+		return uploadSize + "T";
+	}
+
 	@RequestMapping("/uploadDocRS.do")
 	public void uploadDocRS(Integer reposId, String remoteDirectory, String path, String name, Long size, String checkSum,
 			MultipartFile uploadFile,
@@ -1907,8 +1947,9 @@ public class DocController extends BaseController{
 		
 		if(docUserAuth.getUploadSize() != null && docUserAuth.getUploadSize() < size)
 		{
-			Log.debug("uploadDocRS size:" + size + " max uploadSize:" + docUserAuth.getUploadSize());
-			rt.setError("上传文件大小超限，请联系管理员");
+			Log.info("uploadDocRS size:" + size + " docUserAuth max uploadSize:" + docUserAuth.getUploadSize());
+			String maxUploadSize = getMaxUploadSize(docUserAuth.getUploadSize());
+			rt.setError("上传文件大小超限[" + maxUploadSize + "]，请联系管理员");
 			writeJson(rt, response);
 			return;							
 		}
@@ -1941,7 +1982,9 @@ public class DocController extends BaseController{
 			
 			if(parentDocUserAuth.getUploadSize() != null && parentDocUserAuth.getUploadSize() < size)
 			{
-				rt.setError("上传文件大小超限，请联系管理员");
+				Log.info("uploadDocRS size:" + size + " parentDocUserAuth max uploadSize:" + docUserAuth.getUploadSize());
+				String maxUploadSize = getMaxUploadSize(docUserAuth.getUploadSize());
+				rt.setError("上传文件大小超限[" + maxUploadSize + "]，请联系管理员");
 				writeJson(rt, response);
 				return;							
 			}
@@ -2134,8 +2177,8 @@ public class DocController extends BaseController{
 	{
 		Log.info("\n************** updateDocContent ****************");
 		Log.debug("updateDocContent  reposId:" + reposId + " docId:" + docId + " pid:" + pid + " path:" + path + " name:" + name  + " level:" + level + " type:" + type + " docType:" + docType+ " shareId:" + shareId);
-		//Log.println("updateDocContent content:[" + content + "]");
-		//Log.println("content size: " + content.length());
+		//Log.debug("updateDocContent content:[" + content + "]");
+		//Log.debug("content size: " + content.length());
 			
 		ReturnAjax rt = new ReturnAjax();
 		ReposAccess reposAccess = checkAndGetAccessInfo(shareId, session, request, response, reposId, path, name, true, rt);
@@ -2241,7 +2284,7 @@ public class DocController extends BaseController{
 	{
 		Log.info("\n************** tmpSaveDocContent ****************");
 		Log.debug("tmpSaveVirtualDocContent  reposId:" + reposId + " docId:" + docId + " pid:" + pid + " path:" + path + " name:" + name  + " level:" + level + " type:" + type+ " shareId:" + shareId);
-		//Log.println("tmpSaveVirtualDocContent content:[" + content + "]");
+		//Log.debug("tmpSaveVirtualDocContent content:[" + content + "]");
 		
 		ReturnAjax rt = new ReturnAjax();
 		ReposAccess reposAccess = checkAndGetAccessInfo(shareId, session, request, response, reposId, path, name, true, rt);
@@ -2328,7 +2371,7 @@ public class DocController extends BaseController{
 		}
 		else
 		{
-			downloadDocPrepare_FSM(repos, doc, reposAccess.getAccessUser(), true, rt);				
+			downloadDocPrepare_FSM(repos, doc, reposAccess, true, rt);				
 		}
 		
 		writeJson(rt, response);
@@ -2343,7 +2386,7 @@ public class DocController extends BaseController{
 		}
 	}
 	
-	public void downloadDocPrepare_FSM(Repos repos, Doc doc, User accessUser,  boolean remoteStorageEn, ReturnAjax rt)
+	public void downloadDocPrepare_FSM(Repos repos, Doc doc, ReposAccess reposAccess,  boolean remoteStorageEn, ReturnAjax rt)
 	{	
 		if(isFSM(repos) == false)
 		{
@@ -2351,19 +2394,6 @@ public class DocController extends BaseController{
 			remoteStorageEn = false;
 			//从文件服务器拉取文件
 			remoteServerCheckOut(repos, doc, null, null, null, null, true, true, null);
-		}
-		
-		//如果设置了远程存储自动拉取，那么先自动拉取，并设置allPullDone标记，避免后面本地文件不存在时再次远程拉取
-		boolean remoteStorageAutoPullDone = false;
-		if(remoteStorageEn)
-		{	
-			RemoteStorageConfig remoteStorage = repos.remoteStorageConfig;
-			if(remoteStorage != null && remoteStorage.autoPull != null && remoteStorage.autoPull == 1)
-			{
-				Log.debug("downloadDocPrepare_FSM() 远程自动拉取");
-				remoteStorageCheckOut(repos, doc, accessUser, "远程存储自动拉取", true, true, true, rt);
-				remoteStorageAutoPullDone = true;
-			}
 		}
 
 		Doc localEntry = fsGetDoc(repos, doc);
@@ -2380,13 +2410,9 @@ public class DocController extends BaseController{
 			Log.debug("downloadDocPrepare_FSM() Doc " +doc.getPath() + doc.getName() + " 不存在");
 			if(remoteStorageEn)
 			{
-			    if(remoteStorageAutoPullDone == false)
+			    if(remoteStorageCheckOut(repos, doc, reposAccess.getAccessUser(), null, true, true, false, rt) == true)
 				{
-			    	//本地文件不存在且没有自动拉取过，则从远程存储服务器自动拉取文件
-					if(remoteStorageCheckOut(repos, doc, accessUser, "文件下载拉取", true, true, true, rt) == true)
-					{
-						localEntry = fsGetDoc(repos, doc); 	//重新读取本地文件信息
-					}
+					localEntry = fsGetDoc(repos, doc); 	//重新读取本地文件信息
 				}
 			}
 			
@@ -2423,12 +2449,26 @@ public class DocController extends BaseController{
 				return;				
 			}
 			
-			//TODO: 这里存在越权下载文件的风险，需要增加权限检查，避免下载了不应该下载的文件
-			Doc downloadDoc = buildDownloadDocInfo(doc.getVid(), doc.getPath(), doc.getName(), targetPath, targetName, 1);
+			Doc downloadDoc = null;
+			if(repos.encryptType != null && repos.encryptType != 0)
+			{
+				//对于加密的仓库，使用直接下载目录的方式
+				downloadDoc = buildDownloadDocInfo(doc.getVid(), doc.getPath(), doc.getName(), targetPath, targetName, 1);
+				rt.setData(downloadDoc);
+				rt.setMsgData(0);	//下载完成后不删除已下载的文件
+				Log.docSysDebugLog("本地目录: 原始路径下载", rt);
+				return;						
+			}
+			
+			//提前压缩有权限的文件(因为这里涉及加密仓库的文件解密问题，对于加密的仓库每次下载都需要先解密再加密，会增加大量的硬盘使用空间)
+			targetPath = Path.getReposTmpPathForDownload(repos,reposAccess.getAccessUser());
+			targetName = targetName + ".zip";
+			compressAuthedFiles(targetPath, targetName, repos, doc, reposAccess);
+			downloadDoc = buildDownloadDocInfo(doc.getVid(), doc.getPath(), doc.getName(), targetPath, targetName, 0);
 			rt.setData(downloadDoc);
-			rt.setMsgData(0);	//下载完成后删除已下载的文件
-			Log.docSysDebugLog("本地目录: 原始路径下载", rt);
-			return;						
+			rt.setMsgData(1);	//下载完成后删除已下载的文件
+			Log.docSysDebugLog("本地目录: 非原始路径下载", rt);
+			return;
 		}
 		
 		if(localEntry.getType() == 0)
@@ -2442,7 +2482,7 @@ public class DocController extends BaseController{
 			}
 			
 			//本地文件不存在（尝试从版本仓库中下载）
-			targetPath = Path.getReposTmpPathForDownload(repos,accessUser);
+			targetPath = Path.getReposTmpPathForDownload(repos,reposAccess.getAccessUser());
 			Doc remoteEntry = verReposGetDoc(repos, doc, null);
 			if(remoteEntry == null)
 			{
@@ -2481,6 +2521,7 @@ public class DocController extends BaseController{
 				return;				
 			}
 				
+			//TODO: 从历史版本里取出来的文件放到了临时目录里，目前没有进行权限控制
 			Doc downloadDoc = buildDownloadDocInfo(doc.getVid(), doc.getPath(), doc.getName(), targetPath, targetName, 1);
 			rt.setData(downloadDoc);
 			rt.setMsgData(1);	//下载完成后删除已下载的文件
@@ -2492,7 +2533,102 @@ public class DocController extends BaseController{
 		return;		
 	}
 	
-	private boolean remoteStorageCheckOut(Repos repos, Doc doc, User accessUser, String commitMsg, boolean recurcive, boolean force, boolean isAutoPull, ReturnAjax rt)
+    //递归压缩
+    public boolean compressAuthedFiles(String targetPath, String targetName, Repos repos, Doc doc, ReposAccess reposAccess) 
+    {
+    	DocAuth curDocAuth = getUserDocAuthWithMask(repos, reposAccess.getAccessUserId(), doc, reposAccess.getAuthMask());
+		HashMap<Long, DocAuth> docAuthHashMap = getUserDocAuthHashMapWithMask(reposAccess.getAccessUser().getId(), repos.getId(), reposAccess.getAuthMask());
+		
+    	boolean ret = false;
+    	SevenZOutputFile out = null;
+    	try {
+	    	File input = new File(doc.getLocalRootPath() + doc.getPath() + doc.getName());
+	        if (!input.exists()) 
+	        {
+	        	Log.debug(doc.getLocalRootPath() + doc.getPath() + doc.getName() + " 不存在");
+	        	return false;
+	        }
+	        
+	        out = new SevenZOutputFile(new File(targetPath, targetName));
+	        compressAuthedFiles(out, input, repos, doc, curDocAuth, docAuthHashMap);
+	        ret = true;
+    	} catch(Exception e) {
+    		Log.error(e);
+    	} finally {
+    		if(out != null)
+    		{
+    			try {
+					out.close();
+				} catch (IOException e) {
+					Log.error(e);
+				}
+    		}
+    	}
+    	return ret;
+    }
+	public void compressAuthedFiles(SevenZOutputFile out, File input, Repos repos, Doc doc, DocAuth curDocAuth, HashMap<Long, DocAuth> docAuthHashMap) throws Exception 
+    {		
+		if(curDocAuth == null || curDocAuth.getDownloadEn() == null || curDocAuth.getDownloadEn() != 1)
+		{
+			Log.debug("compressAuthedFiles() have no right to download for [" + doc.getPath() + doc.getName() + "]");
+			return;
+		}
+
+	    SevenZArchiveEntry entry = null;
+        //如果路径为目录（文件夹）
+        if (input.isDirectory()) {
+        	//取出文件夹中的文件（或子文件夹）
+            File[] flist = input.listFiles();
+
+            if (flist.length == 0)//如果文件夹为空，则只需在目的地.7z文件中写入一个目录进入
+            {
+    			Log.debug("compressAuthedFiles() [" + doc.getPath() + doc.getName() + "] is empty folder");
+            	entry = out.createArchiveEntry(input, doc.getPath() + doc.getName() + "/");
+                out.putArchiveEntry(entry);
+            } 
+            else//如果文件夹不为空，则递归调用compress，文件夹中的每一个文件（或文件夹）进行压缩
+            {
+    			Log.debug("compressAuthedFiles() [" + doc.getPath() + doc.getName() + "] is folder");
+            	String subDocParentPath = doc.getPath() + doc.getName() + "/";
+            	String localRootPath = doc.getLocalRootPath();
+            	String localVRootPath = doc.getLocalVRootPath();
+            	
+            	for (int i = 0; i < flist.length; i++) {    
+            		File subFile = flist[i];
+            		String subDocName = subFile.getName();
+            		Integer subDocLevel = getSubDocLevel(doc);
+    	    		int type = 1;
+    	    		if(subFile.isDirectory())
+    	    		{
+    	    			type = 2;
+    	    		}
+    	    		long size = subFile.length();
+            		Doc subDoc = buildBasicDoc(repos.getId(), null, doc.getDocId(), doc.getReposPath(), subDocParentPath, subDocName, subDocLevel, type, true,localRootPath, localVRootPath, size, "", doc.offsetPath);
+            		DocAuth subDocAuth = getDocAuthFromHashMap(subDoc.getDocId(), curDocAuth, docAuthHashMap);
+            		compressAuthedFiles(out, flist[i], repos, subDoc, subDocAuth, docAuthHashMap);
+                }
+            }
+        } 
+        else//如果不是目录（文件夹），即为文件，则先写入目录进入点，之后将文件写入7z文件中
+        {
+			Log.debug("compressAuthedFiles() [" + doc.getPath() + doc.getName() + "] is file");
+        	FileInputStream fos = new FileInputStream(input);
+            BufferedInputStream bis = new BufferedInputStream(fos);
+            entry = out.createArchiveEntry(input, doc.getPath() + doc.getName());
+            out.putArchiveEntry(entry);
+            int len = -1;
+            //将源文件写入到7z文件中
+            byte[] buf = new byte[1024];
+            while ((len = bis.read(buf)) != -1) {
+            	out.write(buf, 0, len);
+            }
+            bis.close();
+            fos.close();
+            out.closeArchiveEntry();
+       }
+    }
+	
+	private boolean remoteStorageCheckOut(Repos repos, Doc doc, User accessUser, String commitId, boolean recurcive, boolean force, boolean isAutoPull, ReturnAjax rt)
 	{
 		RemoteStorageConfig remote = repos.remoteStorageConfig;
 		if(remote == null)
@@ -2510,7 +2646,7 @@ public class DocController extends BaseController{
 			return false;
 		}
 		
-		channel.remoteStoragePull(remote, repos, doc, accessUser, "远程存储自动拉取", recurcive, force, isAutoPull, rt);
+		channel.remoteStoragePull(remote, repos, doc, accessUser, commitId, recurcive, force, isAutoPull, rt);
 		DocPullResult pullResult = (DocPullResult) rt.getDataEx();
 		if(pullResult == null)
 		{
@@ -2875,6 +3011,7 @@ public class DocController extends BaseController{
 			Integer shareId,
 			HttpServletResponse response,HttpServletRequest request,HttpSession session) throws Exception
 	{
+		Log.info("\n************** doGetTmpFile ****************");
 		Log.debug("doGetTmpFile  reposId:" + reposId + " path:" + path + " fileName:" + fileName+ " shareId:" + shareId);
 
 		if(path == null)
@@ -2923,7 +3060,7 @@ public class DocController extends BaseController{
 		catch (Exception e) 
 		{
 			Log.debug("getCheckSum() Exception"); 
-			e.printStackTrace();
+			Log.error(e);
 			return null;
 		}
 		return hash;
@@ -2936,7 +3073,9 @@ public class DocController extends BaseController{
 			String rootName,
 			Integer shareId,
 			HttpServletRequest request,HttpServletResponse response,HttpSession session){
-		Log.debug("getZipDocContent reposId:" + reposId + " docId: " + docId + " pid:" + pid + " path:" + path + " name:" + name  + " level:" + level + " type:" + type + " shareId:" + shareId);
+		
+		Log.info("\n************** getZipDocContent ****************");
+		Log.debug("getZipDocContent reposId:" + reposId + " docId: " + docId + " pid:" + pid + " path:" + path + " name:" + name  + " level:" + level + " type:" + type + " rootPath:" + rootPath + " rootName:" + rootName + " shareId:" + shareId);
 
 		if(path == null)
 		{
@@ -3064,26 +3203,15 @@ public class DocController extends BaseController{
 			{
 				if(isFSM(repos))
 				{
-					//远程存储自动拉取
-					boolean autoPullDone = false;
-					RemoteStorageConfig remote = repos.remoteStorageConfig;
-					if(remote != null && remote.autoPull != null && remote.autoPull == 1)
-					{
-						remoteStorageCheckOut(repos, doc, reposAccess.getAccessUser(), "远程存储自动拉取", true, remote.autoPullForce == 1, true, rt);
-						autoPullDone = true;
-					}
-					
-					
 					Doc localEntry = fsGetDoc(repos, doc);
+					//只在文件不存在时才从远程存储下载
 					if(localEntry.getType() == 0)
 					{
-						Log.debug("getDocContent() Doc " +doc.getPath() + doc.getName() + " 不存在");
-						if(autoPullDone == false)
+						Log.debug("getDocContent() Doc " +doc.getPath() + doc.getName() + " 不存在，从远程存储拉取");
+						RemoteStorageConfig remote = repos.remoteStorageConfig;
+						if(remoteStorageCheckOut(repos, doc, reposAccess.getAccessUser(), null, true, remote.autoPullForce == 1, false, rt) == true)
 						{
-							if(remoteStorageCheckOut(repos, doc, reposAccess.getAccessUser(), "远程存储自动拉取", true, remote.autoPullForce == 1, true, rt) == true)
-							{
-								localEntry = fsGetDoc(repos, doc); //重新读取文件信息
-							}
+							localEntry = fsGetDoc(repos, doc); //重新读取文件信息
 						}
 					}		
 				}
@@ -3744,7 +3872,7 @@ public class DocController extends BaseController{
 			}
 		}
 		
-		downloadDocPrepare_FSM(repos, doc, reposAccess.getAccessUser(), false, rt);							
+		downloadDocPrepare_FSM(repos, doc, reposAccess, false, rt);							
 		
 		//rt里保存了下载文件的信息
 		String status = rt.getStatus();
@@ -3790,7 +3918,7 @@ public class DocController extends BaseController{
 			HttpSession session,HttpServletRequest request,HttpServletResponse response)
 	{
 		Log.info("\n*************** getZipDocFileLink ********************");		
-		Log.debug("getZipDocFileLink reposId:" + reposId + " path:" + path + " name:" + name + " shareId:" + shareId);
+		Log.debug("getZipDocFileLink reposId:" + reposId + " path:" + path + " name:" + name + " rootPath:" + rootPath + " rootName:" + rootName + " shareId:" + shareId);
 
 		ReturnAjax rt = new ReturnAjax();
 		
@@ -3814,6 +3942,7 @@ public class DocController extends BaseController{
 		String localVRootPath = Path.getReposVirtualPath(repos);
 
 		Doc rootDoc = buildBasicDoc(reposId, null, null, reposPath, rootPath, rootName, null, null, true, localRootPath, localVRootPath, null, null);
+		Doc tempRootDoc = decryptRootZipDoc(repos, rootDoc);
 		
 		//build tmpDoc
 		String tmpLocalRootPath = Path.getReposTmpPathForUnzip(repos, reposAccess.getAccessUser());
@@ -3824,7 +3953,6 @@ public class DocController extends BaseController{
 		}
 		Doc tmpDoc = buildBasicDoc(reposId, null, null, reposPath, path, name, null, 1, true, tmpLocalRootPath, null, null, null);
 		
-		Doc tempRootDoc = decryptRootZipDoc(repos, rootDoc);
 		checkAndExtractEntryFromCompressDoc(repos, tempRootDoc, tmpDoc);
 		
 		String authCode = addDocDownloadAuthCode();
@@ -5641,14 +5769,14 @@ public class DocController extends BaseController{
       	    {
       	    	hitText = getDocContent(repos, doc, 0, 120, null);
       	    	hitText = Base64Util.base64Encode(hitText);
-      	    	//Log.println("convertSearchResultToDocList() " + doc.getName() + " hitText:" + hitText);	
+      	    	Log.debug("convertSearchResultToDocList() " + doc.getName() + " hitText:" + hitText);	
       	    }
       	    else if((hitType & SEARCH_MASK[2]) > 0) //hit on 文件备注
       	    {
       	    	hitText = readVirtualDocContent(repos, doc, 0, 120);
       	    	hitText = Base64Util.base64Encode(hitText);
      	    	//hitText = removeSpecialJsonChars(hitText);
-      	    	//Log.println("convertSearchResultToDocList() " + doc.getName() + " hitText:" + hitText);	
+      	    	Log.debug("convertSearchResultToDocList() " + doc.getName() + " hitText:" + hitText);	
       	    }
   	    	doc.setContent(hitText);
 		}
@@ -5746,9 +5874,9 @@ public class DocController extends BaseController{
 		//文件名通配符搜索（带空格）
 		if((searchMask & SEARCH_MASK[0]) > 0)
 		{
-			//Log.println("luceneSearch() 文件名通配符搜索（带空格）:" + searchWord);
+			Log.debug("luceneSearch() 文件名通配符搜索（带空格）:" + searchWord);
 			LuceneUtil2.search(repos, preConditions, "nameForSearch", searchWord.toLowerCase(), path, getIndexLibPath(repos,INDEX_DOC_NAME), searchResult, QueryCondition.SEARCH_TYPE_Wildcard, 100, SEARCH_MASK[0]); 	//Search By DocName
-			//Log.println("luceneSearch() 文件名通配符搜索（带空格）:" + searchWord + " count:" + searchResult.size());
+			Log.debug("luceneSearch() 文件名通配符搜索（带空格）:" + searchWord + " count:" + searchResult.size());
 		}
 		
 		//空格是或条件
@@ -5762,28 +5890,38 @@ public class DocController extends BaseController{
 				{
 					//0x00000001; //文件内容
 					//文件名通配符搜索（不切词搜索）
-					//Log.println("luceneSearch() 文件名通配符搜索（不带空格）:" + searchStr);
+					Log.debug("luceneSearch() 文件名通配符搜索（不带空格）:" + searchStr);
 					LuceneUtil2.search(repos, preConditions, "nameForSearch", searchStr.toLowerCase(), path, getIndexLibPath(repos,INDEX_DOC_NAME), searchResult, QueryCondition.SEARCH_TYPE_Wildcard, 1, SEARCH_MASK[0]);	//Search By FileName
-					//Log.println("luceneSearch() 文件名通配符搜索（不带空格）:" + searchStr + " count:" + searchResult.size());
+					Log.debug("luceneSearch() 文件名通配符搜索（不带空格）:" + searchStr + " count:" + searchResult.size());
 
 					//文件名智能搜索（切词搜索）
-					//Log.println("luceneSearch() 文件名智能搜索:" + searchStr);
+					Log.debug("luceneSearch() 文件名智能搜索:" + searchStr);
 					LuceneUtil2.smartSearch(repos, preConditions, "content", searchStr, path, getIndexLibPath(repos,INDEX_DOC_NAME), searchResult, QueryCondition.SEARCH_TYPE_Term, 1, SEARCH_MASK[0]);	//Search By FileName
-					//Log.println("luceneSearch() 文件名智能搜索:" + searchStr + " count:" + searchResult.size());
+					Log.debug("luceneSearch() 文件名智能搜索:" + searchStr + " count:" + searchResult.size());
 				}
 				if((searchMask & SEARCH_MASK[1]) > 0)
 				{
 					//0x00000002; //文件内容搜索
-					//Log.println("luceneSearch() 文件内容智能搜索:" + searchStr);
-					LuceneUtil2.smartSearch(repos, preConditions, "content", searchStr, path, getIndexLibPath(repos,INDEX_R_DOC), searchResult, QueryCondition.SEARCH_TYPE_Term, 0, SEARCH_MASK[1]);	//Search By FileContent
-					//Log.println("luceneSearch() 文件内容智能搜索:" + searchStr + " count:" + searchResult.size());
+					Log.debug("luceneSearch() 文件内容智能搜索:" + searchStr);
+					//Search By FileContent
+					boolean ret = LuceneUtil2.smartSearch(repos, preConditions, "content", searchStr, path, getIndexLibPath(repos,INDEX_R_DOC), searchResult, QueryCondition.SEARCH_TYPE_Term, 0, SEARCH_MASK[1]);
+					if(ret == false  ||  searchResult.size() == 0)
+					{
+						LuceneUtil2.smartSearchEx(repos, preConditions, "content", searchStr, path, getIndexLibPath(repos,INDEX_R_DOC), searchResult, QueryCondition.SEARCH_TYPE_Term, 0, SEARCH_MASK[1]);
+					}
+					
+					Log.debug("luceneSearch() 文件内容智能搜索:" + searchStr + " count:" + searchResult.size());
 				}
 				if((searchMask & SEARCH_MASK[2]) > 0)
 				{	
 					//0x00000004; //文件备注搜索
-					//Log.println("luceneSearch() 文件备注智能搜索:" + searchStr);
-					LuceneUtil2.smartSearch(repos, preConditions, "content", searchStr, path, getIndexLibPath(repos,INDEX_V_DOC), searchResult, QueryCondition.SEARCH_TYPE_Term, 0, SEARCH_MASK[2]);	//Search By VDoc
-					//Log.println("luceneSearch() 文件备注智能搜索:" + searchStr + " count:" + searchResult.size());
+					Log.debug("luceneSearch() 文件备注智能搜索:" + searchStr);
+					boolean ret = LuceneUtil2.smartSearch(repos, preConditions, "content", searchStr, path, getIndexLibPath(repos,INDEX_V_DOC), searchResult, QueryCondition.SEARCH_TYPE_Term, 0, SEARCH_MASK[2]);
+					if(ret == false ||  searchResult.size() == 0)
+					{
+						LuceneUtil2.smartSearchEx(repos, preConditions, "content", searchStr, path, getIndexLibPath(repos,INDEX_V_DOC), searchResult, QueryCondition.SEARCH_TYPE_Term, 0, SEARCH_MASK[2]);						
+					}
+					Log.debug("luceneSearch() 文件备注智能搜索:" + searchStr + " count:" + searchResult.size());
 				}
 			}
 		}
@@ -5841,26 +5979,6 @@ public class DocController extends BaseController{
 		rt.setData(docList);	
 		writeJson(rt, response);
 	}
-	
-	private Doc decryptRootZipDoc(Repos repos, Doc rootZipDoc) {
-		Doc tempRootDoc = rootZipDoc;
-		if(repos.encryptType != null && repos.encryptType != 0)
-		{
-			//TODO: getReposTmpPathForZipDecrypt 返回的路径没有区分用户，也就是说用户将共用解压后的zip文件，这里没有上锁，所以存在风险
-			String zipDocDecryptPath = Path.getReposTmpPathForZipDecrypt(repos, rootZipDoc);
-			File rootFile = new File(rootZipDoc.getLocalRootPath() + rootZipDoc.getPath(), rootZipDoc.getName());
-			String tmpLocalRootPathForZipDoc = zipDocDecryptPath + rootFile.lastModified() + "/";
-			if(FileUtil.isFileExist(tmpLocalRootPathForZipDoc + rootZipDoc.getPath() + rootZipDoc.getName()) == false)
-			{
-				FileUtil.clearDir(tmpLocalRootPathForZipDoc);	//删除旧的临时文件
-				FileUtil.createDir(tmpLocalRootPathForZipDoc);
-				FileUtil.copyFile(rootZipDoc.getLocalRootPath() + rootZipDoc.getPath() + rootZipDoc.getName(), tmpLocalRootPathForZipDoc + rootZipDoc.getPath() + rootZipDoc.getName(), true);
-				decryptFile(repos, tmpLocalRootPathForZipDoc + rootZipDoc.getPath(), rootZipDoc.getName());
-			}
-			tempRootDoc = buildBasicDoc(rootZipDoc.getVid(), null, null, rootZipDoc.getReposPath(), rootZipDoc.getPath(), rootZipDoc.getName(), null, 1, true, tmpLocalRootPathForZipDoc, null, null, null);
-		}
-		return tempRootDoc;
-	}
 
 	/****************   get Zip SubDocList ******************/
 	@RequestMapping("/getZipSubDocList.do")
@@ -5894,8 +6012,6 @@ public class DocController extends BaseController{
 		String localRootPath = Path.getReposRealPath(repos);
 		String localVRootPath = Path.getReposVirtualPath(repos);
 		Doc rootDoc = buildBasicDoc(reposId, null, null, reposPath, docPath, docName, null, 2, true, localRootPath, localVRootPath, null, null);
-
-		//decrypt rootZipFile
 		Doc tempRootDoc = decryptRootZipDoc(repos, rootDoc);
 		
 		List <Doc> subDocList = null;
@@ -5953,11 +6069,11 @@ public class DocController extends BaseController{
 		{
 		case "zip":
 		case "war":
-			return getSubDocListForZip(repos, rootDoc, path, name, rt);
+			//return getSubDocListForZip(repos, rootDoc, path, name, rt);
+		case "7z":
+			//return getSubDocListFor7z(repos, rootDoc, path, name, rt);			
 		case "rar":
 			return getSubDocListForCompressFile(repos, rootDoc, path, name, rt);			
-		case "7z":
-			return getSubDocListFor7z(repos, rootDoc, path, name, rt);			
 		case "tar":
 			return getSubDocListForTar(repos, rootDoc, path, name, rt);	
 		case "tgz":
@@ -5981,9 +6097,9 @@ public class DocController extends BaseController{
 	
 	//使用SevenZip方式（支持多种格式）
 	private List<Doc> getSubDocListForCompressFile(Repos repos, Doc rootDoc, String path, String name, ReturnAjax rt) {
-		Log.debug("getSubDocListForRar() path:" + rootDoc.getPath() + " name:" + rootDoc.getName());
+		Log.debug("getSubDocListForCompressFile(Repos, Doc, String, String, ReturnAjax)() path:" + rootDoc.getPath() + " name:" + rootDoc.getName());
 		String zipFilePath = rootDoc.getLocalRootPath() + rootDoc.getPath() + rootDoc.getName();
-		Log.debug("getSubDocListForRar() zipFilePath:" + zipFilePath);
+		Log.debug("getSubDocListForCompressFile(Repos, Doc, String, String, ReturnAjax)() zipFilePath:" + zipFilePath);
 		
         String rootPath = rootDoc.getPath() + rootDoc.getName() + "/";
 
@@ -5999,7 +6115,7 @@ public class DocController extends BaseController{
             ISimpleInArchive simpleInArchive = inArchive.getSimpleInterface();
             
             for (ISimpleInArchiveItem entry : simpleInArchive.getArchiveItems()) {
-               //Log.println(String.format("%9s | %9s | %s", // 
+               //Log.debug(String.format("%9s | %9s | %s", // 
                //         entry.getSize(), 
                //         entry.getPackedSize(), 
                //         entry.getPath()));
@@ -6008,20 +6124,23 @@ public class DocController extends BaseController{
                subDocList.add(subDoc);
             }
         } catch (Exception e) {
-            System.err.println("Error occurs: " + e);
+            Log.error("getSubDocListForCompressFile(Repos, Doc, String, String, ReturnAjax)() Error occurs");
+            Log.error(e);
         } finally {
             if (inArchive != null) {
                 try {
                     inArchive.close();
                 } catch (SevenZipException e) {
-                    System.err.println("Error closing archive: " + e);
+                    Log.error("getSubDocListForCompressFile(Repos, Doc, String, String, ReturnAjax)() Error closing archive");
+                    Log.error(e);
                 }
             }
             if (randomAccessFile != null) {
                 try {
                     randomAccessFile.close();
                 } catch (IOException e) {
-                    System.err.println("Error closing file: " + e);
+                    Log.error("getSubDocListForCompressFile(Repos, Doc, String, String, ReturnAjax)() Error closing file");
+                    Log.error(e);
                 }
             }
         }
@@ -6067,7 +6186,7 @@ public class DocController extends BaseController{
 				subDocList.add(subDoc);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.error(e);
         }finally {
             try {
                 if(archive != null){
@@ -6077,7 +6196,7 @@ public class DocController extends BaseController{
                     outputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.error(e);
             }
         }
 		return subDocList;
@@ -6169,7 +6288,7 @@ public class DocController extends BaseController{
             	subDocList.addAll(parentDocListForAdd);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.error(e);
         }finally {
             try {
                 if(fis != null){
@@ -6185,7 +6304,7 @@ public class DocController extends BaseController{
                     tis.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.error(e);
             }
         }
 		return subDocList;
@@ -6228,7 +6347,7 @@ public class DocController extends BaseController{
             	subDocList.addAll(parentDocListForAdd);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.error(e);
         }finally {
             try {
                 if(out != null){
@@ -6247,7 +6366,7 @@ public class DocController extends BaseController{
                     fileInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.error(e);
             }
         }
 		return subDocList;
@@ -6283,7 +6402,7 @@ public class DocController extends BaseController{
                 }
                 //tgz文件中的name可能带./需要预处理
                 String entryPath = entry.getName();
-                //Log.println("subEntry:" + entryPath);
+                Log.debug("subEntry:" + entryPath);
                 
                 if(entryPath.indexOf("./") == 0)
                 {
@@ -6294,16 +6413,16 @@ public class DocController extends BaseController{
                 	entryPath = entryPath.substring(2);
                 }
 				String subDocPath = rootPath + entryPath;
-				//Log.println("subDoc: " + subDocPath);
+				Log.debug("subDoc: " + subDocPath);
 				
 				Doc subDoc = buildBasicDocFromZipEntry(rootDoc, subDocPath, entry);
 				subDocHashMap.put(subDoc.getDocId(), subDoc);
 				
-				//Log.printObject("subDoc:", subDoc);
+				Log.printObject("subDoc:", subDoc);
 				subDocList.add(subDoc);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.error(e);
         }finally {
             try {
                 if(out != null){
@@ -6322,7 +6441,7 @@ public class DocController extends BaseController{
                     fileInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.error(e);
             }
         }
 		return subDocList;
@@ -6359,7 +6478,7 @@ public class DocController extends BaseController{
             	subDocList.addAll(parentDocListForAdd);
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.error(e);
         }finally {
             try {
                 if(sevenZFile != null){
@@ -6369,7 +6488,7 @@ public class DocController extends BaseController{
                     outputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.error(e);
             }
         }
         return subDocList;
@@ -6477,7 +6596,7 @@ public class DocController extends BaseController{
             	subDocList.addAll(parentDocListForAdd);
             }
         } catch (IOException e) {
-           e.printStackTrace();
+           Log.error(e);
         }finally {
             try {
                 if(fis != null){
@@ -6490,7 +6609,7 @@ public class DocController extends BaseController{
                     tarInputStream.close();
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                Log.error(e);
             }
         }
 		return subDocList;
@@ -6602,12 +6721,12 @@ public class DocController extends BaseController{
 					}
 				}
 				String subDocPath = rootPath + entry.getName();
-				//Log.println("getSubDocListForZip() subDoc: " + subDocPath);
+				Log.debug("getSubDocListForZip() subDoc: " + subDocPath);
 				Doc subDoc = buildBasicDocFromZipEntry(rootDoc, subDocPath, entry);
 				subDocList.add(subDoc);
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			Log.error(e);
 			subDocList = null;
 		} finally {
 			if(zipFile != null)
@@ -6615,7 +6734,7 @@ public class DocController extends BaseController{
 				try {
 					zipFile.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.error(e);
 				}
 			}
 		}

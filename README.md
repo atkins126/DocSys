@@ -97,7 +97,7 @@ MxsDoc是基于Web的文件管理系统，支持权限管理、历史版本管�
 #### 专业版价格
 |有效期/用户数量 |   20人           |     50人      |    100人      |     200人     |    500人      |    不限       |
 | ------------- | --------------- | ------------- | ------------- | ------------- | ------------- | ------------- |
-| 长期          |        500元     |    800元      |    1200元     |     1800元    |    3200元     |   5000元      |
+| 长期          |        980元     |    1580元      |    2580元     |     3580元    |    5000元     |   7500元      |
 
 #### 企业版价格
 |有效期/用户数量 |   20人           |     50人      |    100人      |     200人     |    500人      |    不限       |
@@ -111,13 +111,23 @@ MxsDoc是基于Web的文件管理系统，支持权限管理、历史版本管�
 # 常见问题
 ### 一、二次开发如何集成商业版功能
 
-#### 1、下载对应的商业版本[DocSystem.war](https://github.com/RainyGao-GitHub/DocSys/releases)
+#### 1、编译开源版本 DocSystem.war
 
-#### 2、集成商业版功能
+#### 2、下载对应的商业版本[DocSystem.war](https://github.com/RainyGao-GitHub/DocSys/releases)
 
-解压DocSystem.war到本地，并分别复制 DocSystem\web\static\office-editor 和 DocSystem\WEB-INF\classes\com\DocSystem\websocket 到源码的 WebRoot\web\static 和 WebRoot\WEB-INF\classes\com\DocSystem 目录
+#### 3、集成商业版功能
 
-### 二、Linux系统war包直接部署Office无法预览和编辑
+复制商业版本中的 DocSystem\web\static\office-editor 和 DocSystem\WEB-INF\classes\com\DocSystem\websocket 目录到开源版本对应的目录
+
+### 二、使用自定义mysql数据库无法登录
+
+#### 1、手动创建数据库
+
+#### 2、触发数据库初始化
+
+删除docSys.ini/version文件，重启MxsDoc
+
+### 三、Linux系统war包直接部署Office无法预览和编辑
 
 #### 1、手动创建DocSystem目录
 
@@ -129,13 +139,13 @@ MxsDoc是基于Web的文件管理系统，支持权限管理、历史版本管�
 
 #### 3、重启MxsDoc
 
-### 三、Windows系统Office无法预览和编辑
+### 四、Windows系统Office无法预览和编辑
 
 #### 1、检查系统缺少的动态库并修复
 
 双击运行 DocSystem\web\static\office-editor\bin\documentserver-generate-allfonts.bat ，根据报错提示确定需要修复的动态库
 
-### 四、Linux系统Excel在线编辑退出后，修改内容丢失
+### 五、Linux系统Excel在线编辑退出后，修改内容丢失
 
 #### 1、安装字体库
 
@@ -157,7 +167,7 @@ fc-cache
 
 运行  DocSystem\web\static\office-editor\bin\documentserver-generate-allfonts.sh 
 
-### 五、Linux系统中文乱码
+### 六、Linux系统中文乱码
 
 #### 1、查看当前使用的系统语言
 
@@ -179,7 +189,7 @@ vi  /etc/sysconfig/i18n
 
 修改为 LANG="zh_CN.UTF-8" 并重启系统
 
-### 六、什么是分布式远程存储
+### 七、什么是分布式远程存储
 
 1、仓库文件可以存储在远程文件服务器（FTP/SFTP/SMB/SVN/GTI/MXSDOC）
 
@@ -191,13 +201,13 @@ vi  /etc/sysconfig/i18n
 
 5、仓库可以独立于远程文件服务器进行文件操作和版本管理
 
-### 七、什么是文件服务器前置
+### 八、什么是文件服务器前置
 
 1. 设置为文件服务器前置的仓库，可以作为的文件服务器的客户端使用，
 
 2. 在该仓库页面上，能够查看和操作文件服务器（FTP/SFTP/SMB/SVN/GTI/MXSDOC）上的文件和目录
 
-### 八、如何使用MxsDoc作为自动备份工具
+### 九、如何使用MxsDoc作为自动备份工具
 
 1. 新建仓库
 
@@ -211,13 +221,13 @@ vi  /etc/sysconfig/i18n
 
 （3）根据自己需求勾选备份时间
 
-### 九、Windows的共享文件夹无法远程访问
+### 十、Windows的共享文件夹无法远程访问
 
 1. 打开控制面板-->程序和功能-->启用或关闭windows功能-->勾选SMB 1.0/CIFS文件共享支持
 
 2. 重启系统
 
-### 十、日志获取
+### 十一、日志获取
 
 1. Windows系统：用startWithLog.bat启动，日志在docsys/logs目录
 

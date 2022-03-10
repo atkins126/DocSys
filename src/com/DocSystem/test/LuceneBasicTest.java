@@ -6,6 +6,7 @@ import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field.Store;
 import org.apache.lucene.document.IntField;
+import org.apache.lucene.document.StringField;
 import org.apache.lucene.document.TextField;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexWriter;
@@ -22,7 +23,7 @@ import org.wltea.analyzer.lucene.IKAnalyzer;
 
 class LuceneBasicTest  
 {        
-    private static String path = "d:/index";
+    private static String path = "C:/LueneBasicTest1";
 
      
     public static void main(String[] args){
@@ -32,11 +33,14 @@ class LuceneBasicTest
     	//addIndex(5,"1","77");
     	//addIndex(5,"1","88");
      	//updateIndex();
+    	addIndex(5,"1","21,31");
     	System.out.println("search");
-        search("55"); 
-        search("66"); 
-        search("77"); 
-        search("88"); 
+        search("1"); 
+        search("21"); 
+        search("31"); 
+        search("41"); 
+        search("51"); 
+        
     }
      
     public static void addIndex(Integer id,String docId,String content){
@@ -44,7 +48,7 @@ class LuceneBasicTest
         	Analyzer analyzer = new IKAnalyzer();
         	Directory directory = FSDirectory.open(new File(path));
 
-            IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_CURRENT, analyzer);
+            IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_46, analyzer);
         	
             IndexWriter write =  new IndexWriter(directory, config);
             
@@ -89,13 +93,14 @@ class LuceneBasicTest
     }
      
     public static void search(String str){
+    	System.out.println("search str = " + str);
         try {
             Directory directory = FSDirectory.open(new File(path));
             DirectoryReader ireader = DirectoryReader.open(directory);
             IndexSearcher isearcher = new IndexSearcher(ireader);
             
             Analyzer analyzer = new IKAnalyzer();
-            QueryParser parser = new QueryParser(Version.LUCENE_CURRENT, "content",analyzer);
+            QueryParser parser = new QueryParser(Version.LUCENE_46, "content",analyzer);
             Query query =  parser.parse(str);
             
             ScoreDoc[] hits = isearcher.search(query, null, 1000).scoreDocs;

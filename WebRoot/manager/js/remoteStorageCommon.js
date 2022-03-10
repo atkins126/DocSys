@@ -6,7 +6,7 @@ function getPlacehoderForRemoteStorageProtocol(protocol)
 	switch(protocol)
 	{
 	case "ftp":
-		str = 'ftp://192.168.0.1:21/path;userName=test;pwd=123456;';
+		str = 'ftp://192.168.0.1:21/path;userName=test;pwd=123456;charset=utf-8;';
 		break;
 	case "sftp":
 		str = 'sftp://192.168.0.1:22/path;userName=test;pwd=123456;';
@@ -55,6 +55,10 @@ function buildRemoteStorageConfigStr(remoteStorageConfig)
 		if(remoteStorageConfig.FTP.charset)
 		{
 			remoteStorage += ";charset=" + remoteStorageConfig.FTP.charset;
+		}
+		if(remoteStorageConfig.FTP.isPassive)
+		{
+			remoteStorage += ";isPassive=" + remoteStorageConfig.FTP.isPassive;
 		}
 		break;
 	case "sftp":

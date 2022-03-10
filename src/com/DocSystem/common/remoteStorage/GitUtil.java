@@ -87,26 +87,33 @@ public class GitUtil {
 	public boolean login() {
 		gitDir = localVerReposPath + ".git/";
 		wcDir = localVerReposPath;
-		if(isRemote)
+		if(isRemote == false)
 		{
-			File file = new File(gitDir);
-			if(file.exists() == false)
+			return OpenRepos();			
+		}
+		
+		//remote repos
+		File file = new File(gitDir);
+		if(file.exists() == false)
+		{
+			if(CloneRepos() == null)
 			{
-				if(CloneRepos() == null)
-				{
-					Log.debug("GitUtil login failed: Clone Repos Failed");
-					return false;
-				}
-			}
-			
-			if(doPullEx() == false)
-			{
-				Log.debug("GitUtil login failed: doPullEx Failed");
+				Log.debug("GitUtil login failed: Clone Repos Failed");
 				return false;
 			}
 		}
-		
-		OpenRepos();
+			
+	    if(OpenRepos() == false)
+	    {
+	       	Log.debug("GitUtil login failed: open git repository Failed");
+	    	return false;
+	    }
+
+		if(doPullEx() == false)
+		{
+			Log.debug("GitUtil login failed: doPullEx Failed");
+			return false;
+		}
 		return true;
 	}
 
@@ -124,8 +131,8 @@ public class GitUtil {
         try {
 			git = Git.open(new File(gitDir));
 		} catch (IOException e) {
-			System.out.println("OpenRepos() Failed to open gitDir:" + gitDir);
-			e.printStackTrace();
+			Log.debug("OpenRepos() Failed to open gitDir:" + gitDir);
+			Log.info(e);
 			return false;
 		}
         
@@ -159,15 +166,15 @@ public class GitUtil {
 	
     //新建本地git仓库
 	public String CreateRepos(){
-		System.out.println("CreateRepos");
+		Log.debug("CreateRepos");
 		
 		File dir = new File(gitDir);
 		File wcdir = new File(wcDir);
         try {
 			Git.init().setGitDir(dir).setDirectory(wcdir).call();
 		} catch (Exception e) {
-			e.printStackTrace();
-			System.out.println("CreateRepos error");
+			Log.info(e);
+			Log.debug("CreateRepos error");
 			return null;
 		}
         
@@ -176,14 +183,14 @@ public class GitUtil {
 	
     //Clone仓库: clone到path + name目录下
 	public String CloneRepos(){
-		System.out.println("CloneRepos from :" + repositoryURL);
+		Log.debug("CloneRepos from :" + repositoryURL);
 		
 		CloneCommand cloneCommand = Git.cloneRepository();
 		cloneCommand.setURI(repositoryURL);
 		
 		if(user != null && !user.isEmpty())
 		{
-			System.out.println("CloneRepos user:" + user);
+			Log.debug("CloneRepos user:" + user);
 			cloneCommand.setCredentialsProvider( new UsernamePasswordCredentialsProvider(user, pwd));
 		}
 		
@@ -195,8 +202,8 @@ public class GitUtil {
 		try {
 			cloneCommand.call();
 		} catch (Exception e) {
-			System.out.println("CloneRepos error");
-			e.printStackTrace();
+			Log.debug("CloneRepos error");
+			Log.info(e);
 			return null;
 		}
         
@@ -267,8 +274,8 @@ public class GitUtil {
 	        
 	        return null;
 	    } catch (Exception e) {
-			System.out.println("getLatestRevCommit 异常");	
-			e.printStackTrace();
+			Log.debug("getLatestRevCommit 异常");	
+			Log.info(e);
 		}
 		return null;
 	}
@@ -289,16 +296,14 @@ public class GitUtil {
             RevTree revTree = getRevTree(revision);
             if(revTree == null)
             {
-            	System.out.println("getSubEntries() Failed to get revTree for:" + entryPath + " at revision:" + revision);
-            	CloseRepos();
+            	Log.debug("getSubEntries() Failed to get revTree for:" + entryPath + " at revision:" + revision);
             	return null;            	
             }
             
             TreeWalk treeWalk = getTreeWalkByPath(revTree, entryPath);
             if(treeWalk == null) 
             {
-            	System.out.println("getSubEntries() Failed to get treeWalk for:" + entryPath + " at revision:" + revision);
-            	CloseRepos();
+            	Log.debug("getSubEntries() Failed to get treeWalk for:" + entryPath + " at revision:" + revision);
             	return null;
             }
             
@@ -314,12 +319,12 @@ public class GitUtil {
 	        }
 	        else
 	        {
-	        	System.out.println("getSubEntries() treeWalk for:" + entryPath + " is not directory");
+	        	Log.debug("getSubEntries() treeWalk for:" + entryPath + " is not directory");
 	            return null;
 	        }            
         } catch (Exception e) {
-            System.out.println("getSubEntries() getTreeWalkByPath Exception"); 
-            e.printStackTrace();
+            Log.debug("getSubEntries() getTreeWalkByPath Exception"); 
+            Log.info(e);
             return null;
          }
 	}
@@ -357,7 +362,7 @@ public class GitUtil {
 		{
 			if(localEntry.exists())
 			{
-				System.out.println("getRemoteFile() " + localParentPath+targetName + " 已存在");
+				Log.debug("getRemoteFile() " + localParentPath+targetName + " 已存在");
 				return false;
 			}
 			else
@@ -385,24 +390,16 @@ public class GitUtil {
 			}
 		}
 		
-        if(OpenRepos() == false)
-        {
-			System.out.println("getRemoteFile() Failed to open git repository:" + gitDir);
-        	return false;
-        }
-
         RevTree revTree = getRevTree(revision);
         if(revTree == null)
         {
-        	CloseRepos();
         	return false;
         }
 
 		TreeWalk treeWalk = getTreeWalkByPath(revTree, remoteEntryPath);
 		if(treeWalk == null)
 		{
-			System.out.println("getRemoteFile() treeWalk is null for:" + remoteEntryPath);
-			CloseRepos();
+			Log.debug("getRemoteFile() treeWalk is null for:" + remoteEntryPath);
 			return false;
 		}
 		
@@ -417,23 +414,21 @@ public class GitUtil {
 		try {
 			out = new FileOutputStream(localParentPath + targetName);
 		} catch (Exception e) {
-			System.out.println("getRemoteFile() new FileOutputStream Failed:" + localParentPath + targetName);
-			e.printStackTrace();
-	        CloseRepos();
+			Log.debug("getRemoteFile() new FileOutputStream Failed:" + localParentPath + targetName);
+			Log.info(e);
 			return false;
 		}
 		
 		try {
 	        ObjectId blobId = treeWalk.getObjectId(0);
 	        ObjectLoader loader = repository.open(blobId);
-	        System.out.println("getRemoteFile() at " + revision + " " + remoteEntryPath + " size:" + loader.getSize());	//文件大小
+	        Log.debug("getRemoteFile() at " + revision + " " + remoteEntryPath + " size:" + loader.getSize());	//文件大小
 	        loader.copyTo(out);
 	        out.close();
 	        out = null;
 		} catch (Exception e) {
-			System.out.println("getRemoteFile() loader.copy Failed:" + localParentPath + targetName);
-			e.printStackTrace();
-			CloseRepos();
+			Log.debug("getRemoteFile() loader.copy Failed:" + localParentPath + targetName);
+			Log.info(e);
 			if(out != null)
 			{
 				try {
@@ -445,7 +440,6 @@ public class GitUtil {
 			return false;
 		}
         
-        CloseRepos();
         return true;
 	}
 	
@@ -461,29 +455,29 @@ public class GitUtil {
             ObjectId objId = repository.resolve(revision);
             if(objId == null)
             {
-            	System.out.println("getRevTree() there is no any history for repository:" + gitDir + " at revision:" + revision);
+            	Log.debug("getRevTree() there is no any history for repository:" + gitDir + " at revision:" + revision);
             	return null;
             }
         
             RevCommit revCommit = walk.parseCommit(objId);
             if(revCommit == null)
             {
-            	System.out.println("getRevTree() parseCommit Failed");
+            	Log.debug("getRevTree() parseCommit Failed");
             	return null;
             }
         
             RevTree revTree = revCommit.getTree();
             return revTree;
 		} catch (Exception e) {
-	    	System.out.println("getRevTree() 异常");
-	        e.printStackTrace();
+	    	Log.debug("getRevTree() 异常");
+	        Log.info(e);
 		}
         return null;
 	}
 	
 
 	private TreeWalk getTreeWalkByPath(RevTree revTree, String entryPath) {
-		//System.out.println("getTreeWalkByPath() entryPath:" + entryPath); 
+		//Log.debug("getTreeWalkByPath() entryPath:" + entryPath); 
 
 		try {
 			TreeWalk treeWalk = null;
@@ -503,8 +497,8 @@ public class GitUtil {
 			}    
 			return treeWalk;
         }catch (Exception e) {
-            System.out.println("getTreeWalkByPath() Exception"); 
-            e.printStackTrace();
+            Log.debug("getTreeWalkByPath() Exception"); 
+            Log.info(e);
         }
 		return null;
 	}
@@ -518,48 +512,30 @@ public class GitUtil {
 			return true;
 		}
 		
-    	if(OpenRepos() == false)
-    	{
-        	System.out.println("doPullEx() Failed to open git repository");
-    		return false;
-    	}
-
 		if(checkAndCleanBranch(git, repository, "master") == false)
 		{
-			System.out.println("doPullEx() Failed to checkAndCleanBranch");
+			Log.debug("doPullEx() Failed to checkAndCleanBranch");
     		return false;
 		}
 		
     	boolean ret = doPull(git, repository);
-    	
-    	CloseRepos();
-
     	return ret;
 	}
 	
 	public boolean checkAndClearnBranch()
 	{
-    	if(OpenRepos() == false)
-    	{
-        	System.out.println("checkAndClearnBranch() Failed to open git repository");
-    		return false;
-    	}
-
 		if(checkAndCleanBranch(git, repository, "master") == false)
 		{
-	    	CloseRepos();
-			System.out.println("checkAndClearnBranch() Failed to checkAndCleanBranch");
+			Log.debug("checkAndClearnBranch() Failed to checkAndCleanBranch");
 			return false;
 		}
-
-		CloseRepos();
     	return true;
 	}
 	
 	
 	public boolean checkAndCleanBranch(Git git, Repository repo, String branchName) 
 	{
-		System.out.println("checkAndCleanBranch branchName:" + branchName);
+		Log.debug("checkAndCleanBranch branchName:" + branchName);
 		
 		//Get curBranchName and check if curBranch is correct
 		String curBranchName = null;
@@ -570,24 +546,24 @@ public class GitUtil {
 				curBranchName = fullBranch.substring(Constants.R_HEADS.length());
 			}
 		} catch (IOException e) {
-			System.out.println("checkAndCleanBranch get branchName Exception");
-			e.printStackTrace();
+			Log.debug("checkAndCleanBranch get branchName Exception");
+			Log.info(e);
 			return false;
 		}
 		if(curBranchName == null || !curBranchName.equals(branchName))
 		{
-			System.out.println("checkAndCleanBranch curBranchName not matched:" + curBranchName);
+			Log.debug("checkAndCleanBranch curBranchName not matched:" + curBranchName);
 			Ref ret = null;
 			try {
 				ret = git.checkout().setName(branchName).call();
 			} catch (Exception e) {
-				e.printStackTrace();
+				Log.info(e);
 				return false;
 			} 
 			
 			if(ret == null)
 			{
-				System.out.println("checkAndCleanBranch failed to checkout branch:" + branchName);
+				Log.debug("checkAndCleanBranch failed to checkout branch:" + branchName);
 				return false;
 			}
 		}
@@ -595,21 +571,21 @@ public class GitUtil {
 		//Check and Clean Branch
 		try {
 			org.eclipse.jgit.api.Status status = git.status().call();
-            System.out.println("Git Change: " + status.getChanged());
-            System.out.println("Git Modified: " + status.getModified());
-            System.out.println("Git UncommittedChanges: " + status.getUncommittedChanges());
-            System.out.println("Git Untracked: " + status.getUntracked());
+            Log.debug("Git Change: " + status.getChanged());
+            Log.debug("Git Modified: " + status.getModified());
+            Log.debug("Git UncommittedChanges: " + status.getUncommittedChanges());
+            Log.debug("Git Untracked: " + status.getUntracked());
             if(status.isClean())
             {
-				System.out.println("checkAndCleanBranch branch is clean");            	
+				Log.debug("checkAndCleanBranch branch is clean");            	
             	return true;
             }
             
-    		System.out.println("checkAndCleanBranch branch is dirty, doCleanBranch");        	
+    		Log.debug("checkAndCleanBranch branch is dirty, doCleanBranch");        	
             return doCleanBranch(git, repo, status);            
 		} catch (Exception e) {
-			System.out.println("checkAndCleanBranch check and clean branch Exception");
-			e.printStackTrace();
+			Log.debug("checkAndCleanBranch check and clean branch Exception");
+			Log.info(e);
 			return false;
 		}
 	}
@@ -632,10 +608,10 @@ public class GitUtil {
 				branchName = fullBranch.substring(Constants.R_HEADS.length());
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
-		System.out.println("doPullEx branchName:" + branchName);
+		Log.debug("doPullEx branchName:" + branchName);
 		
 		if (remoteBranchName == null && branchName != null) {
 			// get the name of the branch in the remote repository
@@ -647,7 +623,7 @@ public class GitUtil {
 		if (remoteBranchName == null) {
 			remoteBranchName = branchName;
 		}
-		System.out.println("doPullEx remoteBranchName:" + remoteBranchName);			
+		Log.debug("doPullEx remoteBranchName:" + remoteBranchName);			
 		if (remoteBranchName == null) {
 			return false;
 		}
@@ -655,7 +631,7 @@ public class GitUtil {
 		RepositoryState reposState = repo.getRepositoryState();
 		if (!reposState.equals(RepositoryState.SAFE))
 		{
-			System.out.println("doPullEx repos is not safe now:" + 	reposState);
+			Log.debug("doPullEx repos is not safe now:" + 	reposState);
 			switch(reposState)
 			{
 			case REBASING_MERGE:
@@ -692,7 +668,7 @@ public class GitUtil {
 		try {
 			fetchRes = fetch.call();
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
 		
@@ -706,7 +682,7 @@ public class GitUtil {
 						+ remoteBranchName);
 		}
 		if (r == null) {
-			System.out.println("doPullEx success: Nothing was updated on remote");
+			Log.debug("doPullEx success: Nothing was updated on remote");
 			return true;
 		}
 
@@ -715,7 +691,7 @@ public class GitUtil {
 				ConfigConstants.CONFIG_REMOTE_SECTION, remote,
 				ConfigConstants.CONFIG_KEY_URL);
 		
-		System.out.println("doPullEx remoteUri:" + remoteUri);
+		Log.debug("doPullEx remoteUri:" + remoteUri);
 		if (remoteUri == null) {
 			return false;
 		}
@@ -723,14 +699,14 @@ public class GitUtil {
 		String upstreamName = MessageFormat.format(
 				JGitText.get().upstreamBranchName,
 				Repository.shortenRefName(remoteBranchName), remoteUri);
-		System.out.println("doPullEx upstreamName:" + upstreamName);
+		Log.debug("doPullEx upstreamName:" + upstreamName);
 		
 		RebaseCommand rebase = git.rebase();
 		RebaseResult rebaseRes;
 		try {
 			rebaseRes = rebase.setUpstream(commitToMerge).setUpstreamName(upstreamName).call();
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
 		
@@ -738,7 +714,7 @@ public class GitUtil {
 		Log.printObject("doPullEx rebase status:",status);
 		if(status.isSuccessful())
 		{
-			System.out.println("doPullEx success: rebase OK");
+			Log.debug("doPullEx success: rebase OK");
 			return true;
 		}
 		
@@ -757,16 +733,16 @@ public class GitUtil {
 			return ret.getStatus().isSuccessful();
 		} catch (NoHeadException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		} catch (RefNotFoundException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		} catch (WrongRepositoryStateException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		} catch (GitAPIException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		}
 		return false;
 	}
@@ -778,16 +754,16 @@ public class GitUtil {
 			return ret.getStatus().isSuccessful();
 		} catch (NoHeadException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		} catch (RefNotFoundException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		} catch (WrongRepositoryStateException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		} catch (GitAPIException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Log.info(e);
 		}
 		return false;
 	}
@@ -804,7 +780,7 @@ public class GitUtil {
 		RevTree revTree = rebaseRes.getCurrentCommit().getTree();
         if(revTree == null)
         {
-        	System.out.println("doFixRebaseConflict revTree is null for revision:" + rebaseRes.getCurrentCommit().getName());
+        	Log.debug("doFixRebaseConflict revTree is null for revision:" + rebaseRes.getCurrentCommit().getName());
         	return false;
         }
         
@@ -812,17 +788,17 @@ public class GitUtil {
 		try {
 			status = git.status().call();
 		} catch (Exception e) {
-			e.printStackTrace();
+			Log.info(e);
 			return false;
 		}
 		
-        System.out.println("Git Change: " + status.getChanged());
-        System.out.println("Git Modified: " + status.getModified());
-        System.out.println("Git UncommittedChanges: " + status.getUncommittedChanges());
-        System.out.println("Git Untracked: " + status.getUntracked());
+        Log.debug("Git Change: " + status.getChanged());
+        Log.debug("Git Modified: " + status.getModified());
+        Log.debug("Git UncommittedChanges: " + status.getUncommittedChanges());
+        Log.debug("Git Untracked: " + status.getUntracked());
         if(status.isClean())
         {
-			System.out.println("checkAndCleanBranch branch is clean");            	
+			Log.debug("checkAndCleanBranch branch is clean");            	
         	return true;
         }
         //Do revert conflict files one by one
@@ -830,12 +806,12 @@ public class GitUtil {
         while(iter.hasNext())
         {
         	String entryPath = iter.next();
-        	System.out.println("doFixRebaseConflict entryPath:" + entryPath);
+        	Log.debug("doFixRebaseConflict entryPath:" + entryPath);
         	
         	TreeWalk treeWalk = getTreeWalkByPath(revTree, entryPath);
         	if(treeWalk == null)
         	{
-        		System.out.println("doFixRebaseConflict() treeWalk is null for:" + entryPath);
+        		Log.debug("doFixRebaseConflict() treeWalk is null for:" + entryPath);
         		return false;
         	}
 
@@ -844,23 +820,23 @@ public class GitUtil {
 			try {
 				out = new FileOutputStream(wcEntryPath);
 			} catch (Exception e) {
-				System.out.println("doFixRebaseConflict() new FileOutputStream Failed:" + wcEntryPath);
-				e.printStackTrace();
+				Log.debug("doFixRebaseConflict() new FileOutputStream Failed:" + wcEntryPath);
+				Log.info(e);
 				return false;
 			}
 			
 			try {
 		        ObjectId blobId = treeWalk.getObjectId(0);
 		        ObjectLoader loader = repository.open(blobId);
-		        System.out.println("doFixRebaseConflict() at " + revision + " " + entryPath + " size:" + loader.getSize());	//文件大小
+		        Log.debug("doFixRebaseConflict() at " + revision + " " + entryPath + " size:" + loader.getSize());	//文件大小
 		        loader.copyTo(out);
 		        out.close();
 		        out = null;
 		        //Add to Index 
 				git.add().addFilepattern(entryPath).call();
 			} catch (Exception e) {
-				System.out.println("doFixRebaseConflict() loader.copy Failed:" + wcEntryPath);
-				e.printStackTrace();
+				Log.debug("doFixRebaseConflict() loader.copy Failed:" + wcEntryPath);
+				Log.info(e);
 				if(out != null)
 				{
 					try {
@@ -884,8 +860,8 @@ public class GitUtil {
 			}
 	        return true;
 		} catch (Exception e) {
-			System.out.println("ResetWcDir() Failed to open wcDir:" + wcDir);
-			e.printStackTrace();
+			Log.debug("ResetWcDir() Failed to open wcDir:" + wcDir);
+			Log.info(e);
 			return false;
 		}			    
 	}
@@ -894,7 +870,7 @@ public class GitUtil {
 	    Integer type = checkPath(srcPath + srcName, null);
 	    if(type == null || type == 0)
 	    {
-	    	System.out.println("doCopy() " + srcPath + srcName  + " not exists");
+	    	Log.debug("doCopy() " + srcPath + srcName  + " not exists");
 	    	return null;
 	    }
 		
@@ -902,8 +878,8 @@ public class GitUtil {
 		try {
 			git = Git.open(new File(wcDir));
 		} catch (Exception e) {
-			System.out.println("doCopy() Failed to open wcDir:" + wcDir);
-			e.printStackTrace();
+			Log.debug("doCopy() Failed to open wcDir:" + wcDir);
+			Log.info(e);
 			return null;
 		}
 		
@@ -911,7 +887,7 @@ public class GitUtil {
 		{
 			if(moveEntry(git, srcPath, srcName, dstPath, dstName) == false)
 		    {
-		    	System.out.println("doCopy() moveEntry Failed");
+		    	Log.debug("doCopy() moveEntry Failed");
 		    	git.close();
 		        return null;
 		    }			
@@ -920,7 +896,7 @@ public class GitUtil {
 		{
 			if(copyEntry(git, srcPath, srcName, dstPath, dstName) == false)
 		    {
-		    	System.out.println("doCopy() copyEntry Failed");
+		    	Log.debug("doCopy() copyEntry Failed");
 		    	git.close();
 		        return null;
 		    }
@@ -951,7 +927,7 @@ public class GitUtil {
 	public String doCommit(String commitMsg, String commitUser, DocPushResult pushResult, List<CommitAction> commitActionList) {
 	    if(commitActionList == null || commitActionList.size() ==0)
 	    {
-	    	System.out.println("doCommit() There is nothing to commit");
+	    	Log.debug("doCommit() There is nothing to commit");
 	        return null;
 	    }
 	    
@@ -982,14 +958,14 @@ public class GitUtil {
 		try {
 			git = Git.open(new File(wcDir));
 		} catch (Exception e) {
-			System.out.println("doAutoCommit() Failed to open wcDir:" + wcDir);
-			e.printStackTrace();
+			Log.debug("doAutoCommit() Failed to open wcDir:" + wcDir);
+			Log.info(e);
 			return null;
 		}
 		
 		if(executeCommitActionList(git,realCommitActionList,true) == false)
 	    {
-	    	System.out.println("doAutoCommit() executeCommitActionList Failed");
+	    	Log.debug("doAutoCommit() executeCommitActionList Failed");
 	    	git.close();
 	        return null;
 	    }
@@ -1015,7 +991,7 @@ public class GitUtil {
 	private List<CommitAction> getRealCommitActionList(Doc doc, String commitMsg, String commitUser,
 			DocPushResult pushResult, List<CommitAction> commitActionList) {
     	String parentPath = doc.getPath();
-        System.out.println("getRealCommitActionList() parentPath:" + parentPath);
+        Log.debug("getRealCommitActionList() parentPath:" + parentPath);
 
         String [] paths = parentPath.split("/");
     	
@@ -1072,8 +1048,8 @@ public class GitUtil {
 	    	
 	    	pushResult.actionList = realCommitActionList;
     	} catch (Exception e) {
-    		System.out.println("getRealCommitActionList() Exception");
-    		e.printStackTrace();
+    		Log.debug("getRealCommitActionList() Exception");
+    		Log.info(e);
     	}
     	
     	return realCommitActionList;
@@ -1112,15 +1088,15 @@ public class GitUtil {
 	       
 	        if(status.name().equals("OK") || status.name().equals("UP_TO_DATE"))
 	        {
-	        	System.out.println("doPush() Push OK");	    	
+	        	Log.debug("doPush() Push OK");	    	
 		        return true;		        	
 	        }
 
-			System.out.println("doPush() Push Failed");
+			Log.debug("doPush() Push Failed");
 			return false;
 		} catch (Exception e) {
-			System.out.println("doPush() Push Exception");	
-			e.printStackTrace();
+			Log.debug("doPush() Push Exception");	
+			Log.info(e);
 			return false;
 		}
 	}
@@ -1136,8 +1112,8 @@ public class GitUtil {
         try {
 			checkoutCmd.call();
 		} catch (Exception e) {
-			System.out.println("rollBackIndex() Exception");
-			e.printStackTrace();
+			Log.debug("rollBackIndex() Exception");
+			Log.info(e);
 			return false;
 		}
         return true;
@@ -1161,17 +1137,17 @@ public class GitUtil {
         RevCommit ret = null;
         try {
 			ret = git.commit().setCommitter(commitUser, "").setMessage(commitMsg).call();
-			System.out.println("doAutoCommmit() commitId:" + ret.getName());
+			Log.debug("doAutoCommmit() commitId:" + ret.getName());
 		} catch (Exception e) {
-			System.out.println("doAutoCommmit() commit error");
-			e.printStackTrace();
+			Log.debug("doAutoCommmit() commit error");
+			Log.info(e);
 			return null;
 		}
 		return ret.getName();
 	}
 
 	private boolean executeCommitActionList(Git git, List<CommitAction> commitActionList,boolean openRoot) {
-    	System.out.println("executeCommitActionList() szie: " + commitActionList.size());
+    	Log.debug("executeCommitActionList() szie: " + commitActionList.size());
 		try {
 	    	for(int i=0;i<commitActionList.size();i++)
 	    	{
@@ -1193,8 +1169,8 @@ public class GitUtil {
 	    	}	    	
 	    	return true;
 		} catch (Exception e) {
-			System.out.println("executeCommitActionList() 异常");	
-			e.printStackTrace();
+			Log.debug("executeCommitActionList() 异常");	
+			Log.info(e);
 			return false;
 		}
 	}
@@ -1203,7 +1179,7 @@ public class GitUtil {
 		Doc doc = action.getDoc();
 		
 		//Log.printObject("executeModifyAction:", doc);
-		System.out.println("executeModifyAction() " + doc.getPath() + doc.getName());
+		Log.debug("executeModifyAction() " + doc.getPath() + doc.getName());
 		
 		if(!modifyFile(git, doc))
 		{
@@ -1217,7 +1193,7 @@ public class GitUtil {
 		Doc doc = action.getDoc();
 
 		//Log.printObject("executeDeleteAction:", doc);
-		System.out.println("executeDeleteAction() " + doc.getPath() + doc.getName());
+		Log.debug("executeDeleteAction() " + doc.getPath() + doc.getName());
 		if(!deleteEntry(git, doc))
 		{
 			action.setResult(false);
@@ -1230,7 +1206,7 @@ public class GitUtil {
 		Doc doc = action.getDoc();
 	
 		//Log.printObject("executeAddAction:", doc);
-		System.out.println("executeAddAction() " + doc.getPath() + doc.getName());
+		Log.debug("executeAddAction() " + doc.getPath() + doc.getName());
 		
 		//entry is file
 		if(doc.getType() == 1)
@@ -1278,15 +1254,15 @@ public class GitUtil {
     	
     	if(FileUtil.copyFile(docPath, wcDocPath, true) == false)
 		{
-			System.out.println("modifyFile() copy File to WD error");					
+			Log.debug("modifyFile() copy File to WD error");					
 			return false;
 		}
     	
     	try {	
 			git.add().addFilepattern(remoteEntryPath).call();
 		} catch (Exception e) {
-			System.out.println("addEntry() add Index Error");	
-			e.printStackTrace();
+			Log.debug("addEntry() add Index Error");	
+			Log.info(e);
 			return false;
 		}
 		return true;
@@ -1300,15 +1276,15 @@ public class GitUtil {
 		
 		if(FileUtil.delFileOrDir(wcDocPath) == false)
 		{
-			System.out.println("deleteEntry() delete WD Error");	
+			Log.debug("deleteEntry() delete WD Error");	
 			return false;
 		}
 		
 		try {	
 			git.rm().addFilepattern(remoteEntryPath).call();
 		} catch (Exception e) {
-			System.out.println("addEntry() add Index Error");	
-			e.printStackTrace();
+			Log.debug("addEntry() add Index Error");	
+			Log.info(e);
 			return false;
 		}
 		return true;
@@ -1329,7 +1305,7 @@ public class GitUtil {
 		{
 			if(FileUtil.copyFile(docPath, wcDocPath, true) == false)
 			{
-				System.out.println("addEntry() FileUtil.copyFile from " + docPath + " to " + wcDocPath + " 失败");		
+				Log.debug("addEntry() FileUtil.copyFile from " + docPath + " to " + wcDocPath + " 失败");		
 				return false;
 			}
 		}
@@ -1341,7 +1317,7 @@ public class GitUtil {
 			{
 				if(dir.mkdir() == false)
 				{
-					System.out.println("addEntry() mkdir for " + wcDocPath + " 失败");					
+					Log.debug("addEntry() mkdir for " + wcDocPath + " 失败");					
 					return false;
 				}
 			}
@@ -1350,8 +1326,8 @@ public class GitUtil {
 		try {	
 			git.add().addFilepattern(remoteEntryPath).call();
 		} catch (Exception e) {
-			System.out.println("addEntry() git.add.addFilepattern.call for " + remoteEntryPath + " 失败");	
-			e.printStackTrace();
+			Log.debug("addEntry() git.add.addFilepattern.call for " + remoteEntryPath + " 失败");	
+			Log.info(e);
 			return false;
 		}
 		return true;
@@ -1366,7 +1342,7 @@ public class GitUtil {
 		
 		if(FileUtil.moveFileOrDir(wcDir + srcPath, srcName,  wcDir + dstPath, dstName, false) == false)
 		{
-			System.out.println("copyEntry() FileUtil.moveFileOrDir from " + srcWcDocPath + " to " + dstWcDocPath + " 失败");		
+			Log.debug("copyEntry() FileUtil.moveFileOrDir from " + srcWcDocPath + " to " + dstWcDocPath + " 失败");		
 			return false;
 		}			
 		
@@ -1374,8 +1350,8 @@ public class GitUtil {
 		try {	
 			git.add().addFilepattern(dstRemoteEntryPath).call();
 		} catch (Exception e) {
-			System.out.println("addEntry() git.add.addFilepattern.call for " + dstRemoteEntryPath + " 失败");	
-			e.printStackTrace();
+			Log.debug("addEntry() git.add.addFilepattern.call for " + dstRemoteEntryPath + " 失败");	
+			Log.info(e);
 			return false;
 		}
 
@@ -1383,8 +1359,8 @@ public class GitUtil {
 		try {	
 			git.rm().addFilepattern(srcRemoteEntryPath).call();
 		} catch (Exception e) {
-			System.out.println("addEntry() git.add.addFilepattern.call for " + srcRemoteEntryPath + " 失败");	
-			e.printStackTrace();
+			Log.debug("addEntry() git.add.addFilepattern.call for " + srcRemoteEntryPath + " 失败");	
+			Log.info(e);
 			//return false;
 		}
 
@@ -1400,15 +1376,15 @@ public class GitUtil {
 	
 		if(FileUtil.copyFileOrDir(srcWcDocPath, dstWcDocPath, false) == false)
 		{
-			System.out.println("copyEntry() FileUtil.copyFileOrDir from " + srcWcDocPath + " to " + dstWcDocPath + " 失败");		
+			Log.debug("copyEntry() FileUtil.copyFileOrDir from " + srcWcDocPath + " to " + dstWcDocPath + " 失败");		
 			return false;
 		}
 		
 		try {	
 			git.add().addFilepattern(dstRemoteEntryPath).call();
 		} catch (Exception e) {
-			System.out.println("addEntry() git.add.addFilepattern.call for " + dstRemoteEntryPath + " 失败");	
-			e.printStackTrace();
+			Log.debug("addEntry() git.add.addFilepattern.call for " + dstRemoteEntryPath + " 失败");	
+			Log.info(e);
 			return false;
 		}
 		return true;
@@ -1418,14 +1394,7 @@ public class GitUtil {
 	//getHistory entryPath: remote File Path under repositoryURL
     public List<LogEntry> getHistoryLogs(String entryPath,String startRevision, String endRevision,int maxLogNum) 
     {
-    	System.out.println("getHistoryLogs entryPath:" + entryPath);	
-
-    	if(OpenRepos() == false)
-    	{
-        	System.out.println("getLatestRevCommit() Failed to open git repository");
-    		return null;
-    	}
-    	
+    	Log.debug("getHistoryLogs entryPath:" + entryPath);	    	
     	try {
 	    	List<LogEntry> logList = new ArrayList<LogEntry>();
 				
@@ -1455,14 +1424,14 @@ public class GitUtil {
 	
 	            String commitId=commit.getName();  //这个应该就是提交的版本号
 	
-////	            System.out.println("authorEmail:"+authorEmail);
-////	            System.out.println("authorName:"+author);
-////	            System.out.println("commitEmail:"+commitUserEmail);
-//	            System.out.println("commitName:"+commitUser);
-//	            System.out.println("time:"+commitTime);
-//	            System.out.println("fullMessage:"+fullMessage);
-////	            System.out.println("shortMessage:"+shortMessage);
-//	            System.out.println("commitId:"+commitId);
+////	            Log.debug("authorEmail:"+authorEmail);
+////	            Log.debug("authorName:"+author);
+////	            Log.debug("commitEmail:"+commitUserEmail);
+//	            Log.debug("commitName:"+commitUser);
+//	            Log.debug("time:"+commitTime);
+//	            Log.debug("fullMessage:"+fullMessage);
+////	            Log.debug("shortMessage:"+shortMessage);
+//	            Log.debug("commitId:"+commitId);
 	            
 	            LogEntry log = new LogEntry();
 	            log.setCommitId(commitId);
@@ -1472,12 +1441,10 @@ public class GitUtil {
 	            logList.add(log);
 	        }
 	        
-	        CloseRepos();
 	        return logList;
 	    } catch (Exception e) {
-			System.out.println("getHistoryLogs Error");	
-			e.printStackTrace();
-			CloseRepos();
+			Log.debug("getHistoryLogs Error");	
+			Log.info(e);
 			return null;
 		}
     }
@@ -1485,14 +1452,14 @@ public class GitUtil {
     //getHistory wcDir
     public List<LogEntry> getWCHistoryLogs(String entryPath,String startRevision, String endRevision,int maxLogNum) 
     {
-    	System.out.println("getWCHistoryLogs entryPath:" + entryPath);	
+    	Log.debug("getWCHistoryLogs entryPath:" + entryPath);	
 
     	Git git = null;
         try {
 			git = Git.open(new File(wcDir));
 		} catch (IOException e) {
-			System.out.println("getWCHistoryLogs() Failed to open gitDir:" + gitDir);
-			e.printStackTrace();
+			Log.debug("getWCHistoryLogs() Failed to open gitDir:" + gitDir);
+			Log.info(e);
 			return null;
 		}
         
@@ -1526,10 +1493,10 @@ public class GitUtil {
 	
 	            String commitId=commit.getName();  //这个应该就是提交的版本号
 	
-	            System.out.println("commitName:"+commitUser);
-	            System.out.println("time:"+commitTime);
-	            System.out.println("fullMessage:"+fullMessage);
-	            System.out.println("commitId:"+commitId);
+	            Log.debug("commitName:"+commitUser);
+	            Log.debug("time:"+commitTime);
+	            Log.debug("fullMessage:"+fullMessage);
+	            Log.debug("commitId:"+commitId);
 	            
 	            LogEntry log = new LogEntry();
 	            log.setCommitId(commitId);
@@ -1539,12 +1506,10 @@ public class GitUtil {
 	            logList.add(log);
 	        }
 	        
-	        CloseRepos();
 	        return logList;
 	    } catch (Exception e) {
-			System.out.println("getHistoryLogs Error");	
-			e.printStackTrace();
-			CloseRepos();
+			Log.debug("getHistoryLogs Error");	
+			Log.info(e);
 			return null;
 		}
     }
@@ -1555,21 +1520,13 @@ public class GitUtil {
 		{
 			revision = commitId;
 		}
-		
-    	if(OpenRepos() == false)
-    	{
-        	System.out.println("getHistoryDetail() Failed to open git repository");
-    		return null;
-    	}
     	
-    	List<ChangedItem> changedItemList = getHistoryDetailBasic(entryPath, revision);
-    	
-        CloseRepos();
+    	List<ChangedItem> changedItemList = getHistoryDetailBasic(entryPath, revision);    	
         return changedItemList;
     }
     
 	private List<ChangedItem> getHistoryDetailBasic(String entryPath, String revision) {
-    	//System.out.println("getHistoryDetail entryPath:" + entryPath);	
+    	//Log.debug("getHistoryDetail entryPath:" + entryPath);	
 		
 		List<ChangedItem> changedItemList = new ArrayList<ChangedItem>();
 		
@@ -1578,8 +1535,7 @@ public class GitUtil {
 	        ObjectId objId = repository.resolve(revision);
 	        if(objId == null)
 	        {
-	        	System.out.println("getHistoryDetail() There is no any commit history for repository:"  + gitDir + " at revision:"+ revision);
-	        	CloseRepos();	
+	        	Log.debug("getHistoryDetail() There is no any commit history for repository:"  + gitDir + " at revision:"+ revision);
 	        	return changedItemList;
 	        }
 	        
@@ -1588,7 +1544,7 @@ public class GitUtil {
 
 	        if(previsouCommit == null)	//It is first commit, so all Items was new added
 	        {
-    			System.out.println("getHistoryDetail() previsouCommit is null, so It is first Commit"); 
+    			Log.debug("getHistoryDetail() previsouCommit is null, so It is first Commit"); 
 
 	        	//go through all Items under revTree
 	        	RevTree revTree = revCommit.getTree();
@@ -1604,7 +1560,7 @@ public class GitUtil {
 	    		    	}
 	    		    	
 	    	    		String nodePath =  treeWalk.getPathString();;
-	    	    		//System.out.println("getHistoryDetail() entry nodePath:" + nodePath); 
+	    	    		//Log.debug("getHistoryDetail() entry nodePath:" + nodePath); 
 	    	    		//Add to changedItemList
 	    	    		
 	    	    		ChangedItem changedItem = new ChangedItem();
@@ -1616,8 +1572,8 @@ public class GitUtil {
 	    	    		changedItemList.add(changedItem);				
 	    	    	}
 	    		} catch(Exception e){
-	    			System.out.println("getHistoryDetail() treeWalk.next() Exception"); 
-	                e.printStackTrace();
+	    			Log.debug("getHistoryDetail() treeWalk.next() Exception"); 
+	                Log.info(e);
 	    			return null;
 	    		}
 				return changedItemList;	        	
@@ -1641,7 +1597,7 @@ public class GitUtil {
 			{
 		        for (DiffEntry entry : diffs) 
 		        {
-		          //System.out.println("getHistoryDetail() Entry: " + entry);
+		          //Log.debug("getHistoryDetail() Entry: " + entry);
 		          
 		      	  String nodePath = entry.getNewPath();
 		          Integer entryType = getEntryType(entry.getNewMode());
@@ -1667,8 +1623,8 @@ public class GitUtil {
 			}
 	        return changedItemList;
 		} catch (Exception e) {
-			System.out.println("getHistoryDetail() entryPath:" + entryPath + " 异常");	
-			e.printStackTrace();
+			Log.debug("getHistoryDetail() entryPath:" + entryPath + " 异常");	
+			Log.info(e);
 			return null;
 		}	
 	}

@@ -1213,6 +1213,8 @@ function copyDocInfo(doc, shareId)
 	{
 		var docInfo = {};
 		docInfo.isBussiness = doc.isBussiness;
+		docInfo.officeType = doc.officeType;
+		
 		if(doc.vid)
     	{
 			docInfo.vid = doc.vid;
@@ -1268,8 +1270,6 @@ function copyDocInfo(doc, shareId)
 			}
 		}
 		
-		docInfo.isBussiness = doc.isBussiness;
-		
 		return docInfo;
 	}
 	return null;
@@ -1279,6 +1279,10 @@ function openOffice(docInfo, openInNewPage, preview)
 {
 	console.log("openOffice preview:" + preview);
     var url = "/DocSystem/Bussiness/getDocOfficeLink.do";
+    if(docInfo.isZip && docInfo.isZip == 1)
+    {
+        var url = "/DocSystem/Bussiness/getZipDocOfficeLink.do";    	
+    }
 	$.ajax({
         url : url,
         type : "post",
@@ -1287,6 +1291,8 @@ function openOffice(docInfo, openInNewPage, preview)
         	reposId: docInfo.vid,
             path: docInfo.path,
             name: docInfo.name,
+            rootPath: docInfo.rootPath,
+            rootName: docInfo.rootName,
             commitId: docInfo.commitId,
             shareId: docInfo.shareId,
             preview: preview,  //preview表示是否是预览，预览则是转成pdf
@@ -1299,7 +1305,7 @@ function openOffice(docInfo, openInNewPage, preview)
     				docInfo.fileLink = ret.data;
     				showPdf(docInfo, openInNewPage);
                 }
-            	else
+            	else if(ret.dataEx == "office")
                 {
             		if(openInNewPage != "openInNewPage")
             		{
@@ -1307,6 +1313,11 @@ function openOffice(docInfo, openInNewPage, preview)
             		}
             		showOffice(docInfo, openInNewPage);
                 }
+            	else
+            	{
+                	console.log("previewOfficeInDialog getDocOfficeLink Failed (maybe office not supported or not installed)");
+                	showText(docInfo, openInNewPage); //ReadOnly 方式显示文件内容            		
+            	}
             }
             else
             {
@@ -1546,8 +1557,16 @@ function showImgInNewPage(docInfo, fileLink)
 	{
 		docInfo.fileLink = fileLink;
 	}
+	
 	var urlParamStr = buildRequestParamStrForDoc(docInfo);
-	window.open("/DocSystem/web/imageList.html?" + urlParamStr);
+	if(docInfo.isZip && docInfo.isZip == 1)
+	{
+		window.open("/DocSystem/web/image.html?" + urlParamStr);				
+	}
+	else
+	{
+		window.open("/DocSystem/web/imageList.html?" + urlParamStr);		
+	}
 }
 
 function showVideoInNewPage(docInfo, fileLink){
@@ -1613,6 +1632,12 @@ function showOfficeInNewPage(docInfo)
 function showImgInDialog(docInfo)
 {
 	console.log("showImgInDialog docInfo:", docInfo);
+	var url = 'imgListViewer.html';
+	if(docInfo.isZip && docInfo.isZip == 1)
+	{
+		url = 'imgViewer.html';
+	}
+	
 	bootstrapQ.dialog({
 		id: "ImgListViewer",
 		title: docInfo.name,
@@ -1627,16 +1652,20 @@ function showImgInDialog(docInfo)
 	});
 }
 
-function showImgInArtDialog(docInfo)
-{
+function showImgInArtDialog(docInfo) {
 	console.log("showImgInArtDialog docInfo:", docInfo);
+	var url = 'imgListViewerForArt.html';
+	if (docInfo.isZip && docInfo.isZip == 1) {
+		url = 'imgViewerForArt.html';
+	}
 	//获取窗口的高度并设置高度
-	var height =  getArtDialogInitHeight();
-	var width = getArtDialogInitWidth();	
-	var d = dialog({
-		id: "ArtDialog"  + docInfo.docId,
+	var height = getArtDialogInitHeight();
+	var width = getArtDialogInitWidth();
+	var d = new artDialog({
+		id: "ArtDialog" + docInfo.docId,
 		title: docInfo.name,
-		url: 'imgListViewerForArt.html',
+		url: url,
+		content: '<iframe frameborder="0" name="ArtDialog' + docInfo.docId + '" src="' + url + '?docid=' + docInfo.docId + '" style="width: 100%; height: 100%; border: 0px;" allowtransparency="true" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" sandbox="allow-forms allow-popups allow-scripts allow-modals allow-same-origin"></iframe>',
 		msg: '页面正在加载，请稍等...',
 		foot: false,
 		big: true,
@@ -1646,43 +1675,11 @@ function showImgInArtDialog(docInfo)
 		resize: true,
 		drag: true,
 		data: docInfo,
-		onshow: function(){
-			console.log('onshow');
-		},
-		oniframeload: function () {
-			console.log('oniframeload');
-		},
 	});
-	d.show();
-
-	//等待页面加载好了再获取
-	setTimeout(function (){
-		var isMax = false;
-		
-		var oDiv = document.getElementById("title:ArtDialog"  + docInfo.docId);
-		oDiv.ondblclick=function(ev){
-	    	console.log("DB Clicked on " +"ImgViewer"  + docInfo.docId);
-			if(isMax)
-			{
-				var height =  getArtDialogInitHeight();
-				var width = getArtDialogInitWidth();
-				
-				isMax = false;
-				d.width(width);
-				d.height(height);	
-			}
-			else
-			{
-				//最大化
-				var height =  getArtDialogMaxHeight();
-				var width = getArtDialogMaxWidth();
-				isMax = true;
-				d.width(width);
-				d.height(height);		
-			}	
-		}
-	}, 100);
-	
+	if (window.artDialogList === undefined) {
+		window.artDialogList = {};
+	}
+	window.artDialogList["ArtDialog" + docInfo.docId] = d;
 }
 
 function showVideoInDialog(docInfo){
@@ -1701,16 +1698,15 @@ function showVideoInDialog(docInfo){
 	});
 }
 
-function showVideoInArtDialog(docInfo)
-{
+function showVideoInArtDialog(docInfo) {
 	console.log("showVideoInArtDialog docInfo:", docInfo);
 	//获取窗口的高度并设置高度
 	var height =  getArtDialogInitHeight();
-	var width = getArtDialogInitWidth();	
-	var d = dialog({
-		id: "ArtDialog"  + docInfo.docId,
+	var width = getArtDialogInitWidth();
+	var d = new artDialog({
+		id: "ArtDialog" + docInfo.docId,
 		title: docInfo.name,
-		url: 'videoViewerForArt.html',
+		content: '<iframe frameborder="0" name="ArtDialog' + docInfo.docId + '" src="videoViewerForArt.html?docid=' + docInfo.docId + '" style="width: 100%; height: 100%; border: 0px;" allowtransparency="true" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" sandbox="allow-forms allow-popups allow-scripts allow-modals allow-same-origin"></iframe>',
 		msg: '页面正在加载，请稍等...',
 		foot: false,
 		big: true,
@@ -1720,43 +1716,11 @@ function showVideoInArtDialog(docInfo)
 		resize: true,
 		drag: true,
 		data: docInfo,
-		onshow: function(){
-			console.log('onshow');
-		},
-		oniframeload: function () {
-			console.log('oniframeload');
-		},
 	});
-	d.show();
-
-	//等待页面加载好了再获取
-	setTimeout(function (){
-		var isMax = false;
-		
-		var oDiv = document.getElementById("title:ArtDialog"  + docInfo.docId);
-		oDiv.ondblclick=function(ev){
-	    	console.log("DB Clicked on " +"ArtDialog"  + docInfo.docId);
-			if(isMax)
-			{
-				var height =  getArtDialogInitHeight();
-				var width = getArtDialogInitWidth();
-				
-				isMax = false;
-				d.width(width);
-				d.height(height);	
-			}
-			else
-			{
-				//最大化
-				var height =  getArtDialogMaxHeight();
-				var width = getArtDialogMaxWidth();
-				isMax = true;
-				d.width(width);
-				d.height(height);		
-			}	
-		}
-	}, 100);
-	
+	if (window.artDialogList === undefined) {
+		window.artDialogList = {};
+	}
+	window.artDialogList["ArtDialog" + docInfo.docId] = d;
 }
 
 function showZipInDialog(docInfo)
@@ -1775,15 +1739,14 @@ function showZipInDialog(docInfo)
 	});
 }
 
-function showZipInArtDialog(docInfo)
-{	
+function showZipInArtDialog(docInfo) {
 	//获取窗口的高度并设置高度
-	var height =  getArtDialogInitHeight();
-	var width = getArtDialogInitWidth();	
-	var d = dialog({
-		id: "ArtDialog"  + docInfo.docId,
+	var height = getArtDialogInitHeight();
+	var width = getArtDialogInitWidth();
+	var d = new artDialog({
+		id: "ArtDialog" + docInfo.docId,
 		title: docInfo.name,
-		url: 'zipViewerForArt.html',
+		content: '<iframe frameborder="0" scrolling="auto" name="ArtDialog' + docInfo.docId + '" src="zipViewerForArt.html?docid=' + docInfo.docId + '" style="width: 100%; height: 100%; border: 0px;" allowtransparency="true" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" sandbox="allow-forms allow-popups allow-scripts allow-modals allow-same-origin"></iframe>',
 		msg: '页面正在加载，请稍等...',
 		foot: false,
 		big: true,
@@ -1793,43 +1756,11 @@ function showZipInArtDialog(docInfo)
 		resize: true,
 		drag: true,
 		data: docInfo,
-		onshow: function(){
-			console.log('onshow');
-		},
-		oniframeload: function () {
-			console.log('oniframeload');
-			$(".ui-dialog-content").find("iframe").attr("scrolling", "auto");
-		},
 	});
-	d.show();
-
-	//等待页面加载好了再获取
-	setTimeout(function (){
-		var isMax = false;
-		
-		var oDiv = document.getElementById("title:ArtDialog"  + docInfo.docId);
-		oDiv.ondblclick=function(ev){
-	    	console.log("DB Clicked on " +"ArtDialog"  + docInfo.docId);
-			if(isMax)
-			{
-				var height =  getArtDialogInitHeight();
-				var width = getArtDialogInitWidth();
-				
-				isMax = false;
-				d.width(width);
-				d.height(height);	
-			}
-			else
-			{
-				//最大化
-				var height =  getArtDialogMaxHeight();
-				var width = getArtDialogMaxWidth();
-				isMax = true;
-				d.width(width);
-				d.height(height);		
-			}	
-		}
-	}, 100);
+	if (window.artDialogList === undefined) {
+		window.artDialogList = {};
+	}
+	window.artDialogList["ArtDialog" + docInfo.docId] = d;
 }
 
 function showPdfInDialog(docInfo)
@@ -1848,15 +1779,14 @@ function showPdfInDialog(docInfo)
 	});
 }
 
-function showPdfInArtDialog(docInfo)
-{	
+function showPdfInArtDialog(docInfo) {
 	//获取窗口的高度并设置高度
 	var height =  getArtDialogInitHeight();
-	var width = getArtDialogInitWidth();	
-	var d = dialog({
-		id: "ArtDialog"  + docInfo.docId,
+	var width = getArtDialogInitWidth();
+	var d = new artDialog({
+		id: "ArtDialog" + docInfo.docId,
 		title: docInfo.name,
-		url: 'pdfViewerForArt.html',
+		content: '<iframe frameborder="0" name="ArtDialog' + docInfo.docId + '" src="pdfViewerForArt.html?docid=' + docInfo.docId + '" style="width: 100%; height: 100%; border: 0px;" allowtransparency="true" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" sandbox="allow-forms allow-popups allow-scripts allow-modals allow-same-origin"></iframe>',
 		msg: '页面正在加载，请稍等...',
 		foot: false,
 		big: true,
@@ -1866,42 +1796,11 @@ function showPdfInArtDialog(docInfo)
 		resize: true,
 		drag: true,
 		data: docInfo,
-		onshow: function(){
-			console.log('onshow');
-		},
-		oniframeload: function () {
-			console.log('oniframeload');
-		},
 	});
-	d.show();
-
-	//等待页面加载好了再获取
-	setTimeout(function (){
-		var isMax = false;
-		
-		var oDiv = document.getElementById("title:ArtDialog"  + docInfo.docId);
-		oDiv.ondblclick=function(ev){
-	    	console.log("DB Clicked on " +"ArtDialog"  + docInfo.docId);
-			if(isMax)
-			{
-				var height =  getArtDialogInitHeight();
-				var width = getArtDialogInitWidth();
-				
-				isMax = false;
-				d.width(width);
-				d.height(height);	
-			}
-			else
-			{
-				//最大化
-				var height =  getArtDialogMaxHeight();
-				var width = getArtDialogMaxWidth();
-				isMax = true;
-				d.width(width);
-				d.height(height);		
-			}	
-		}
-	}, 100);
+	if (window.artDialogList === undefined) {
+		window.artDialogList = {};
+	}
+	window.artDialogList["ArtDialog" + docInfo.docId] = d;
 }
 
 function showPdfInDialog(docInfo)
@@ -1943,56 +1842,25 @@ function showMarkdownInArtDialog(docInfo)
 	console.log("showMarkdownInArtDialog docInfo.docId:" + docInfo.docId);
 	//获取窗口的高度并设置高度
 	var height =  getArtDialogInitHeight();
-	var width = getArtDialogInitWidth();	
-	var d = dialog({
+	var width = getArtDialogInitWidth();
+	var d = new artDialog({
 		id: "ArtDialog"  + docInfo.docId,
 		title: docInfo.name,
-		url: 'stackeditEditorForArt.html',
+		content:'<iframe frameborder="0" name="ArtDialog'+docInfo.docId+'" src="stackeditEditorForArt.html?docid='+docInfo.docId+'" style="width: 100%; height: 100%; border: 0px;" allowtransparency="true" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" sandbox="allow-forms allow-popups allow-scripts allow-modals allow-same-origin"></iframe>',
 		msg: '页面正在加载，请稍等...',
-			foot: false,
-			big: true,
-			padding: 0,
-			width: width,
-			height: height,
-			resize: true,
-			drag: true,
-			data: docInfo,
-			onshow: function(){
-				console.log('onshow');
-			},
-			oniframeload: function () {
-				console.log('oniframeload');
-			},
-		});
-	d.show();
-		
-	//等待页面加载好了再获取
-	setTimeout(function (){
-		var isMax = false;
-		
-		var oDiv = document.getElementById("title:ArtDialog"  + docInfo.docId);
-		oDiv.ondblclick=function(ev){
-	    	console.log("DB Clicked on " +"ArtDialog"  + docInfo.docId);
-			if(isMax)
-			{
-				var height = getArtDialogInitHeight();
-				var width = getArtDialogInitWidth();
-				
-				isMax = false;
-				d.width(width);
-				d.height(height);	
-			}
-			else
-			{
-				//最大化
-				var height =  getArtDialogMaxHeight();
-				var width = getArtDialogMaxWidth();
-				isMax = true;
-				d.width(width);
-				d.height(height);		
-			}	
-		}
-	}, 100);
+		foot: false,
+		big: true,
+		padding: 0,
+		width: width,
+		height: height,
+		resize: true,
+		drag: true,
+		data: docInfo,
+	});
+	if(window.artDialogList === undefined) {
+		window.artDialogList = {};
+	}
+	window.artDialogList["ArtDialog"+docInfo.docId] = d;
 }
 
 function showTextInDialog(docInfo, openType)
@@ -2030,87 +1898,30 @@ function showTextInDialog(docInfo, openType)
 	}
 }
 
-function showTextInArtDialog(docInfo, openType)
-{
+function showTextInArtDialog(docInfo) {
 	console.log("showTextInArtDialog docInfo.docId:" + docInfo.docId);
 	//获取窗口的高度并设置高度
 	var height =  getArtDialogInitHeight();
-	var width = getArtDialogInitWidth();	
-	if(openType && openType == "textViewer")
-	{
-		var d = dialog({
-			id: "ArtDialog"  + docInfo.docId,
-			title: docInfo.name,
-			url: 'textViewerForArt.html',
-			msg: '页面正在加载，请稍等...',
-			foot: false,
-			big: true,
-			padding: 0,
-			width: width,
-			height: height,
-			resize: true,
-			drag: true,
-			data: docInfo,
-			onshow: function(){
-				setTimeout(function () {
-					TextViewer.textViewerPageInit(docInfo);
-				}, 2000);
-			},
-		});
-		d.show();
+	var width = getArtDialogInitWidth();
+	var d = new artDialog({
+		id: "ArtDialog" + docInfo.docId,
+		title: docInfo.name,
+		content: '<iframe frameborder="0" name="ArtDialog' + docInfo.docId + '" src="aceEditorForArt.html?docid=' + docInfo.docId + '" style="width: 100%; height: 100%; border: 0px;" allowtransparency="true" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" sandbox="allow-forms allow-popups allow-scripts allow-modals allow-same-origin"></iframe>',
+		msg: '页面正在加载，请稍等...',
+		foot: false,
+		big: true,
+		padding: 0,
+		width: width,
+		height: height,
+		resize: true,
+		drag: true,
+		data: docInfo,
+	});
+	if (window.artDialogList === undefined) {
+		window.artDialogList = {};
 	}
-	else
-	{
-		var d = dialog({
-			id: "ArtDialog"  + docInfo.docId,
-			title: docInfo.name,
-			url: 'aceEditorForArt.html',
-			msg: '页面正在加载，请稍等...',
-			foot: false,
-			big: true,
-			padding: 0,
-			width: width,
-			height: height,
-			resize: true,
-			drag: true,
-			data: docInfo,
-			onshow: function(){
-				console.log('onshow');
-			},
-			oniframeload: function () {
-				console.log('oniframeload');
-			},
-		});
-		d.show();
-		
-		//等待页面加载好了再获取
-		setTimeout(function (){
-			var isMax = false;
-			
-			var oDiv = document.getElementById("title:ArtDialog"  + docInfo.docId);
-			oDiv.ondblclick=function(ev){
-		    	console.log("DB Clicked on " +"ArtDialog"  + docInfo.docId);
-				if(isMax)
-				{
-					var height = getArtDialogInitHeight();
-					var width = getArtDialogInitWidth();
-					
-					isMax = false;
-					d.width(width);
-					d.height(height);	
-				}
-				else
-				{
-					//最大化
-					var height =  getArtDialogMaxHeight();
-					var width = getArtDialogMaxWidth();
-					isMax = true;
-					d.width(width);
-					d.height(height);		
-				}	
-			}
-		}, 100);
-	}
+	window.artDialogList["ArtDialog" + docInfo.docId] = d;
+
 }
 
 function getArtDialogInitWidth()
@@ -2183,17 +1994,16 @@ function showOfficeInDialog(docInfo)
 	});
 }
 
-function showOfficeInArtDialog(docInfo)
-{	
+function showOfficeInArtDialog(docInfo) {
 	//获取窗口的高度并设置高度
 	var height =  getArtDialogInitHeight();
 	var width = getArtDialogInitWidth();
 	var ArtDialogDivContentId = "div[aria-describedby='content:ArtDialog"+docInfo.docId+"']";
 	var ArtDialogId = "ArtDialog"  + docInfo.docId;
-	var d = dialog({
-		id: ArtDialogId,
+	var d = new artDialog({
+		id: "ArtDialog" + docInfo.docId,
 		title: docInfo.name,
-		url: 'officeEditorForArt.jsp',
+		content: '<iframe frameborder="0" name="ArtDialog' + docInfo.docId + '" src="officeEditorForArt.jsp?docid=' + docInfo.docId + '" style="width: 100%; height: 100%; border: 0px;" allowtransparency="true" allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" sandbox="allow-forms allow-popups allow-scripts allow-modals allow-same-origin"></iframe>',
 		msg: '页面正在加载，请稍等...',
 		foot: false,
 		big: true,
@@ -2203,16 +2013,15 @@ function showOfficeInArtDialog(docInfo)
 		resize: true,
 		drag: true,
 		data: docInfo,
-		onshow: function(){
-			console.log('onshow');
-		},
-		oniframeload: function () {
-			console.log('oniframeload');
-		},
-        cancel: function(){
-		    // 原理：该按钮是内嵌office是否保存按钮，保存后该按钮处于禁用状态，未保存，该按钮处于启用状态就代表文档还未保存，则拦截
-        	// 获取该文档唯一iframe,其name是文档唯一值
-			let docIframe = $(ArtDialogDivContentId).find(`iframe[name=${ArtDialogId}]`)[0];
+		cancel: function () {
+			console.log("showOfficeInArtDialog docInfo:",docInfo);
+			if ((docInfo.officeType && docInfo.officeType == 1) ||(docInfo.isZip && docInfo.isZip == 1)) {
+				//压缩文件的Office为只读，不需要检测
+				return true;
+			}
+			// 原理：该按钮是内嵌office是否保存按钮，保存后该按钮处于禁用状态，未保存，该按钮处于启用状态就代表文档还未保存，则拦截
+			// 获取该文档唯一iframe,其name是文档唯一值
+			let docIframe = $("." + ArtDialogId).find(`iframe[name=${ArtDialogId}]`)[0];
 			if (docIframe !== undefined) {
 				// 根据该iframe获取下一级iframe
 				let officeIframe = $(docIframe.contentWindow.document).find("iframe[name=frameEditor]")[0];
@@ -2222,9 +2031,9 @@ function showOfficeInArtDialog(docInfo)
 					if (saveButton !== undefined) {
 						// 获取该元素的禁用状态，开启则提示，禁用则直接关闭窗口即可
 						let check = $(saveButton).prop("disabled");
-						if(!check) {
-							qiao.bs.confirm('文件尚未保存，是否关闭当前窗口？', function(){
-							    dialog.get(ArtDialogId).close();
+						if (!check) {
+							qiao.bs.confirm('文件尚未保存，是否关闭当前窗口？', function () {
+								d.close();
 							});
 							return false;
 						}
@@ -2232,40 +2041,15 @@ function showOfficeInArtDialog(docInfo)
 				}
 			}
 			return true;
-        }
-    });
-	d.show();
-
-	// 去除最后一列的按钮栏
-	$(".ui-dialog .ui-dialog-footer").parent().remove();
-
-	//等待页面加载好了再获取
-	setTimeout(function (){
-		var isMax = false;
-		
-		var oDiv = document.getElementById("title:ArtDialog"  + docInfo.docId);
-		oDiv.ondblclick=function(ev){
-	    	console.log("DB Clicked on " +"ArtDialog"  + docInfo.docId);
-			if(isMax)
-			{
-				var height =  getArtDialogInitHeight();
-				var width = getArtDialogInitWidth();
-				
-				isMax = false;
-				d.width(width);
-				d.height(height);	
-			}
-			else
-			{
-				//最大化
-				var height =  getArtDialogMaxHeight();
-				var width = getArtDialogMaxWidth();
-				isMax = true;
-				d.width(width);
-				d.height(height);		
-			}	
 		}
-	}, 100);
+	});
+	if (window.artDialogList === undefined) {
+		window.artDialogList = {};
+	}
+	window.artDialogList["ArtDialog" + docInfo.docId] = d;
+	// 去除最后一列的按钮栏
+	$("."+ArtDialogId+" .aui-footer").parent().remove();
+
 }
 
 function getZipDialogStyle()

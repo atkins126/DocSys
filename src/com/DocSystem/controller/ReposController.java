@@ -242,23 +242,28 @@ public class ReposController extends BaseController{
 		repos.setSvnPwd1(svnPwd1);
 		repos.setAutoBackup(autoBackup);
 		
-		//由于仓库还未创建，因此无法确定仓库路径是否存在冲突
-		if(checkReposInfoForAdd(repos, rt) == false)
+		//以下这段代码是为了避免有用户同时发起addRepos(前端快速点击添加操作也会引起该行为)，导致两个仓库的文件存储路径信息相同
+		synchronized(syncLockForRepos)
 		{
-			Log.debug("checkReposInfoForAdd() failed");
-			writeJson(rt, response);		
-			return;			
+			//由于仓库还未创建，因此无法确定仓库路径是否存在冲突
+			if(checkReposInfoForAdd(repos, rt) == false)
+			{
+				Log.debug("checkReposInfoForAdd() failed");
+				writeJson(rt, response);		
+				return;			
+			}
+			
+			if(reposService.addRepos(repos) == 0)
+			{
+				rt.setError("新增仓库记录失败");
+				writeJson(rt, response);		
+				return;
+			}
+			Integer reposId = repos.getId();
+			Log.debug("new ReposId" + reposId);
+			SyncLock.unlock(syncLockForRepos);			
 		}
 		
-		if(reposService.addRepos(repos) == 0)
-		{
-			rt.setError("新增仓库记录失败");
-			writeJson(rt, response);		
-			return;
-		}
-		Integer reposId = repos.getId();
-		Log.debug("new ReposId" + reposId);
-
 		//Lock the repos
 		DocLock reposLock = null;
 		int lockType = DocLock.LOCK_TYPE_FORCE;
@@ -320,8 +325,8 @@ public class ReposController extends BaseController{
 			initReposAutoBackupConfig(repos, autoBackup);
 			if(repos.backupConfig != null)
 			{
-				addDelayTaskForLocalBackup(repos, repos.backupConfig.localBackupConfig, 0, true);
-				addDelayTaskForRemoteBackup(repos, repos.backupConfig.remoteBackupConfig, 0, true);
+				addDelayTaskForLocalBackup(repos, repos.backupConfig.localBackupConfig, 0, 60L);
+				addDelayTaskForRemoteBackup(repos, repos.backupConfig.remoteBackupConfig, 0, 60L);
 			}
 		}
 		
@@ -362,20 +367,19 @@ public class ReposController extends BaseController{
 			{
 				config = generateReposEncryptConfig(repos, encryptType);
 			}
+			
+			if(config != null)
+			{
+				reposEncryptHashMap.put(repos.getId(), config);
+			}
 		}
 		else
 		{
-			removeReposEncryptConfig(repos);
-		}
-		
-		if(config == null)
-		{
-			reposEncryptHashMap.remove(repos.getId());
-		}
-		else
-		{
-			reposEncryptHashMap.put(repos.getId(), config);
-		}
+			if(removeReposEncryptConfig(repos) == true)
+			{
+				reposEncryptHashMap.remove(repos.getId());				
+			}
+		}		
 	}
 
 	/****************   delete a Repository ******************/
@@ -568,8 +572,8 @@ public class ReposController extends BaseController{
 			initReposAutoBackupConfig(reposInfo, autoBackup);
 			if(reposInfo.backupConfig != null)
 			{
-				addDelayTaskForLocalBackup(reposInfo, reposInfo.backupConfig.localBackupConfig, 0, true);
-				addDelayTaskForRemoteBackup(reposInfo, reposInfo.backupConfig.remoteBackupConfig, 0, true);
+				addDelayTaskForLocalBackup(reposInfo, reposInfo.backupConfig.localBackupConfig, 0, 60L);
+				addDelayTaskForRemoteBackup(reposInfo, reposInfo.backupConfig.remoteBackupConfig, 0, 60L);
 			}
 		}
 		
@@ -776,18 +780,59 @@ public class ReposController extends BaseController{
 		
 		if(clearReposFileCache(repos, rt) == false)
 		{
-			Log.docSysErrorLog("清除仓库文件缓存失败！", rt);
+			Log.docSysErrorLog("仓库 [" + repos.getName() +"] 缓存清除失败！", rt);
 			writeJson(rt, response);			
 			return;
 		}
 		
-		new Thread(new Runnable() {
-			public void run() {
-				Log.debug("clearReposCache() rebuildReposAllDocIndex() in new Thread");
-				//重建仓库的所有文件索引
-				rebuildReposAllDocIndex(repos);
+		//刷新操作可以完成重建索引，因此不需要在这里处理
+//		new Thread(new Runnable() {
+//			public void run() {
+//				Log.debug("clearReposCache() rebuildReposAllDocIndex() in new Thread");
+//				//重建仓库的所有文件索引
+//				rebuildReposAllDocIndex(repos);
+//			}
+//		}).start();
+		
+		writeJson(rt, response);		
+	}
+	
+	/****************   clear Repository File Cache ******************/
+	@RequestMapping("/clearAllReposCache.do")
+	public void clearAllReposCache(HttpSession session,HttpServletRequest request,HttpServletResponse response)
+	{
+		Log.info("\n****************** clearAllReposCache.do ***********************");
+
+		ReturnAjax rt = new ReturnAjax();
+		User login_user = getLoginUser(session, request, response, rt);
+		if(login_user == null)
+		{
+			rt.setError("用户未登录，请先登录！");
+			writeJson(rt, response);			
+			return;
+		}
+		
+		//检查是否是超级管理员或者仓库owner
+		if(login_user.getType() != 2)	//超级管理员 或 仓库的拥有者可以清除仓库缓存
+		{
+			rt.setError("您无权进行该操作!");				
+			writeJson(rt, response);	
+			return;
+		}
+		
+		List<Repos> reposList = reposService.getAllReposList();
+		for(int i=0;i<reposList.size();i++)
+		{
+			Repos repos = reposList.get(i);
+			if(clearReposFileCache(repos, rt) == false)
+			{
+				Log.info("仓库 [" + repos.getName() + "] 缓存清除失败！");
 			}
-		}).start();
+			else
+			{
+				Log.info("仓库 [" + repos.getName() + "] 缓存清除成功！");				
+			}
+		}
 		
 		writeJson(rt, response);		
 	}
@@ -1350,7 +1395,7 @@ public class ReposController extends BaseController{
 	}
 	
 	private List<ReposAuth> getReposAllUsers(User user, Integer reposId) {
-		//获取user表（通过reposId来joint reposAuht表，以确定用户的仓t库权限），结果实际是reposAuth列表
+		//获取user表（通过reposId来joint reposAuht表，以确定用户的仓库权限），结果实际是reposAuth列表
 		List<ReposAuth> UserList = null;
 		if(user == null)
 		{

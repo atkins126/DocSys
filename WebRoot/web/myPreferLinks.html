@@ -81,6 +81,11 @@
                         <li id="mobileLogoutBtn"  style="display:none">
                             <a onclick="userLogout()" title="退出登录">退出登录</a>
                         </li>
+                        
+                        <li id="mobileSwitchDisplayBtn" style="display:none">
+                            <a  class="display-style" onclick="switchDisplayStyle()" title="切换显示模式">设置</a>
+                        </li>
+                        
                     </ul>
                 </div>
              </div>
@@ -102,7 +107,10 @@
                     <li id="newReposBtn" style="display:none">
 						<a href="#" title="添加网站" onclick="addPreferLink()">添加网站</a>
 					</li>
-                    
+					
+					<li id="switchDisplayBtn" style="display:none">
+                        <a class="display-style" onclick="switchDisplayStyle()" title="切换显示模式">设置</a>
+                    </li>                 
                 </ul>
             </nav>
         </div>
@@ -123,8 +131,9 @@
         <div class="row">
             <div id="preferLink-box" class="project-box"></div>
             <div class="clearfix"></div>
-            <div class="manual-page">
-            </div>
+            <div id="sharedPreferLink-box" class="project-box" style="border-bottom: 2px solid #f2f2f2;"></div>
+            <div class="clearfix"></div>
+            <div class="manual-page"></div>
         </div>
         <div class="clearfix"></div>
     </div>
@@ -159,6 +168,9 @@
                     <a href="{{preferLink.url}}" title="{{preferLink.url}}" target="_blank">{{preferLink.showName}}</a>
 					<ul class="pull-right">
 				    	<li>
+           					<span class="btn" title="分享" onclick="sharePreferLink({{i}});">
+								<i class="icons share {{preferLink.btnIconStyle}}"></i>
+							</span>
            					<span class="btn" title="修改" onclick="editPreferLink({{i}});">
 								<i class="icons set {{preferLink.btnIconStyle}}"></i>
 							</span>
@@ -182,6 +194,71 @@
     </div>
 </script>
 
+<script type="text/html" id="tmpl-preferLinks-icon">
+    <ul>
+	{{each list as preferLink i}}
+    	<li>
+        	<a href="{{preferLink.url}}" target="_blank" class="box" title="" >
+            	<div class="pull-left imgbox">
+                	<i class="fa fa-internet-explorer" style="color:#2ABB9B;"></i>
+            	</div>
+            	<h4>{{preferLink.showName}}</h4>
+            	<span></span>
+        	</a>
+        	<p class="summary hidden-xs hidden-sm hidden-md">
+            	<a href="{{preferLink.url}}" target="_blank" class="text">
+                	{{  preferLink.content }}
+            	</a>
+        	</p>
+    	</li>
+    {{/each}}
+    </ul>
+</script>
+
+<script type="text/html" id="tmpl-sharedPreferLinks">
+    <div style="margin-top: 20px; "></div>
+    {{each list as preferLink i}}
+        <div class="s-box" style="margin-left: 50px">
+            <div class="s-content-box">
+                <h4 class="s-title">
+                    <i class="{{preferLink.iconType}} {{preferLink.iconStyle}}"></i>
+                    <a href="{{preferLink.url}}" title="{{preferLink.url}}" target="_blank">{{preferLink.showName}}</a>
+                </h4>
+                <div class="s-content">
+                    <p>{{# preferLink.content}}</p>
+                </div>
+            </div>     
+			<hr/>
+        </div>
+    {{/each}}
+    <!-- 分页功能 -->
+    <div class="wrap">
+        <ul id="newsList"></ul>
+        <div id="pagination" class="l-page"></div>
+    </div>
+</script>
+
+<script type="text/html" id="tmpl-sharedPreferLinks-icon">
+    <ul>
+	{{each list as preferLink i}}
+    	<li>
+        	<a href="{{preferLink.url}}" target="_blank" class="box" title="" >
+            	<div class="pull-left imgbox">
+                	<i class="fa fa-internet-explorer" style="color:#2ABB9B;"></i>
+            	</div>
+            	<h4>{{preferLink.showName}}</h4>
+            	<span></span>
+        	</a>
+        	<p class="summary hidden-xs hidden-sm hidden-md">
+            	<a href="{{preferLink.url}}" target="_blank" class="text">
+                	{{  preferLink.content }}
+            	</a>
+        	</p>
+    	</li>
+    {{/each}}
+    </ul>
+</script>
+
 <!-- Include all compiled plugins (below), or include individual files as needed -->
 <script src="static/bootstrap/js/bootstrap.min.js" type="text/javascript"></script>
 <script src="static/scripts/scripts.js" type="text/javascript"></script>
@@ -200,6 +277,8 @@
 	var gPageIndex = 1;
 	var gPageSize = 10;
 	var preferLinkList = [];
+	var sharedPreferLinkList = [];
+	var showStyle = 1; //icon style
 	
 	function pageInit()
     {
@@ -232,6 +311,7 @@
                 	loginBtnCtrl(user);
                 	
                 	getPreferLinks();
+                	getSharedPreferLinks();
                 }
                 else 
                 {
@@ -270,35 +350,8 @@
 	
 	function searchPreferLink(pageIndex)
 	{
-		var searchWord = $("#searchWord").val();
-		var sort = "";
-		
-       	$.ajax({
-               url : "/DocSystem/Bussiness/getPreferLinkList.do",
-               type : "post",
-               dataType : "json",
-               data : {
-                   searchWord:searchWord,
-                   sort:sort,
-               },
-               success : function (ret) {
-	           		console.log("searchPreferLink ret:", ret);
-	        		if(ret.status == "ok")
-	           		{
-	           			console.log("搜索成功", ret);
-						var list = ret.data;
-						preferLinkList = list;
-						showPreferLinkList(list);						
-	               	}
-	               	else
-	               	{
-	               		showErrorMessage("搜索出错:" + ret.msgInfo);
-	               	}
-               },
-               error : function () {
-                   showErrorMessage("搜索出错:服务器异常");
-               }
-           });
+		getPreferLinks();
+		getSharedPreferLinks();
 	}
 	
 	function showPreferLinkList(list)
@@ -336,18 +389,117 @@
         			jsonObj.btnIconStyle = "";	 //小图标                			
         		}
         	}
-            var html = template('tmpl-preferLinks', {
-                list : list
-            });
+        	
+        	var html = "";
+        	if(showStyle == 1)
+        	{
+                html = template('tmpl-preferLinks-icon', {
+                    list : list
+                });        		
+        	}
+        	else
+        	{
+                html = template('tmpl-preferLinks', {
+                    list : list
+                });        		
+        	}
             
             $("#preferLink-box").html(html);
     	}
+	}
+	
+	function showSharedPreferLinkList(list)
+	{
+		console.log("showSharedPreferLinkList");
+    	if(undefined == list || list.length == 0)
+    	{
+    		$("#sharedPreferLink-box").hide();
+    		return;
+    	}
+		
+    	for(var i=0; i<list.length; i++)
+       	{
+       		var jsonObj = list[i];
+       		jsonObj.showName = jsonObj.url;
+       		if(jsonObj.name && jsonObj.name != "")
+       		{
+       			jsonObj.showName = jsonObj.name;
+       		}
+       		
+       		jsonObj.iconType = "icons webpage";
+       		if(jsonObj.type == 2)
+       		{
+       			jsonObj.iconType = "icons weblink";
+       		}
+       		else if(jsonObj.type == 3)
+       		{
+       			jsonObj.iconType = "icons webserver";	                			
+       		}
+       		if(gIsPC == true)
+       		{
+       			jsonObj.iconStyle = " bigicon";
+       			jsonObj.btnIconStyle = "";
+       		}
+       		else
+       		{
+       			jsonObj.iconStyle = " middleicon";
+       			jsonObj.btnIconStyle = "";	 //小图标                			
+       		}
+       	}
+       	
+       	var html = "";
+       	if(showStyle == 1)
+       	{
+               html = template('tmpl-sharedPreferLinks-icon', {
+                   list : list
+               });        		
+       	}
+       	else
+       	{
+               html = template('tmpl-sharedPreferLinks', {
+                   list : list
+               });        		
+       	}
+           
+        $("#sharedPreferLink-box").html(html);
+        $("#sharedPreferLink-box").show();    	
 	}
     
     function userLogout()
    	{
     	logout();
     	loginBtnCtrl();
+   	}
+    
+    function switchDisplayStyle()
+   	{
+    	if(showStyle == 0)	//list
+    	{
+    		showStyle = 1;  //icon
+    		$('.display-style').text("设置");
+            $("#sharedPreferLink-box").show();        
+    	}
+    	else
+    	{
+    		showStyle = 0;	//list
+    		$('.display-style').text("退出设置");
+            $("#sharedPreferLink-box").hide();
+    	}
+    	
+    	if(showStyle == 1)
+    	{
+            html = template('tmpl-preferLinks-icon', {
+                list : preferLinkList
+            });        		
+    	}
+    	else
+    	{
+            html = template('tmpl-preferLinks', {
+                list : preferLinkList
+            });        		
+    	}
+        
+        $("#preferLink-box").html(html);        
    	}
     
     function loginBtnCtrl(user)
@@ -362,6 +514,9 @@
            	
         	$('#newReposBtn').show();
         	$('#mobileNewReposBtn').show();
+
+        	$('#switchDisplayBtn').show();
+        	$('#mobileSwitchDisplayBtn').show();
     	}
     	else
     	{
@@ -373,6 +528,9 @@
 
            	$('#newReposBtn').hide();
         	$('#mobileNewReposBtn').hide();
+        	
+        	$('#switchDisplayBtn').hide();
+        	$('#mobileSwitchDisplayBtn').hide();
     	}
     }
     
@@ -482,6 +640,30 @@
 		});
 	}
 	
+	function sharePreferLink(index)
+	{
+		console.log("sharePreferLink() index:" + index);		   	
+		showSharePreferLinkPanel(index);
+	}
+	
+	function showSharePreferLinkPanel(index)
+	{
+		console.log("showSharePreferLinkPanel");
+		
+		bootstrapQ.dialog({
+			id: 'sharePreferLink',
+			url: 'sharePreferLink.html',
+			title: '添加访问用户',
+			msg: '页面正在加载，请稍等...',
+			foot: false,
+			big: false,
+			callback: function(){
+				var preferLink = preferLinkList[index];
+				sharePreferLinkPageInit(preferLink);
+			},
+		});
+	}
+	
 	function editPreferLink(index)
 	{
 		console.log("editPreferLink() index:" + index);		   	
@@ -508,12 +690,18 @@
     
     function getPreferLinks()
     {
-    	console.log("getPreferLinks");
+		var searchWord = $("#searchWord").val();
+		var sort = "";
+		
+    	console.log("getPreferLinks() searchWord:" + searchWord);
         $.ajax({
             url : "/DocSystem/Bussiness/getPreferLinkList.do",
             type :"post",
             dataType :"json",
-            data : null,
+            data : {
+                searchWord:searchWord,
+                sort:sort,
+            },
             success : function (ret) {
                 if(ret.status == "ok")
                 {
@@ -522,6 +710,42 @@
                 	preferLinkList = list;
                 	
                 	showPreferLinkList(list);
+	            }
+	            else
+	            {
+	            	console.log(ret.msgInfo);
+	            	//showErrorMessage("获取常用网站列表失败：" + ret.msgInfo);
+	            }
+            },
+            error : function () {
+            	//showErrorMessage('获取常用网站列表失败：服务器异常');
+            }
+        });
+    }
+    
+    function getSharedPreferLinks()
+    {
+		var searchWord = $("#searchWord").val();
+		var sort = "";
+		
+    	console.log("getSharedPreferLinks() searchWord:" + searchWord);
+    	
+        $.ajax({
+            url : "/DocSystem/Bussiness/getSharedPreferLinkList.do",
+            type :"post",
+            dataType :"json",
+            data : {
+                searchWord:searchWord,
+                sort:sort,
+            	userId : login_user.id,
+            },
+            success : function (ret) {
+                if(ret.status == "ok")
+                {
+                	console.log("getSharedPreferLinks ret:", ret);
+                	var list = ret.data;
+                	sharedPreferLinkList = list;
+                	showSharedPreferLinkList(list);
 	            }
 	            else
 	            {

@@ -75,7 +75,6 @@ import com.DocSystem.common.entity.SystemLog;
 import com.DocSystem.common.entity.UserPreferServer;
 import com.DocSystem.commonService.ProxyThread;
 import com.DocSystem.commonService.ShareThread;
-import com.DocSystem.controller.URLInfo;
 import com.DocSystem.entity.Doc;
 import com.DocSystem.entity.DocLock;
 import com.DocSystem.entity.Repos;
@@ -102,7 +101,8 @@ public class BaseFunction{
 	
     //OnlyOffice License
     public static OfficeLicense officeLicenseInfo = null;
-
+    public static Integer officeType = 0; //0:内置 1:外置
+    
     //系统LDAP设置
     public static LDAPConfig systemLdapConfig = null;
 	
@@ -183,19 +183,22 @@ public class BaseFunction{
 		}
 		
 		systemLdapConfig.authMode = getLdapAuthMode(systemLdapConfig.settings);
+		systemLdapConfig.loginMode = getLdapLoginMode(systemLdapConfig.settings);	
+		systemLdapConfig.userAccount = getLdapUserAccount(systemLdapConfig.settings);				
+		systemLdapConfig.filter = getLdapBaseFilter(systemLdapConfig.settings);
 	}
 
 
 	private static Integer getLdapAuthMode(JSONObject ldapSettings) {
 		if(ldapSettings == null)
 		{
-			return 1;	//默认明文密码验证
+			return 0;	//默认不进行密码验证
 		}
 		
 		String authModeStr = ldapSettings.getString("authMode");
 		if(authModeStr == null || authModeStr.isEmpty())
 		{
-			return 1; //默认明文密码验证
+			return 0; //默认不进行密码验证
 		}
 				
 		switch(authModeStr.toLowerCase())
@@ -213,6 +216,51 @@ public class BaseFunction{
 		}
 		
 		return 1;
+	}
+	
+	private static String getLdapLoginMode(JSONObject ldapSettings) {
+		if(ldapSettings == null)
+		{
+			return "uid";	//默认使用uid
+		}
+		
+		String loginMode = ldapSettings.getString("loginMode");
+		if(loginMode == null || loginMode.isEmpty())
+		{
+			return "uid"; //默认使用uid
+		}
+				
+		return loginMode;
+	}
+	
+	private static String getLdapUserAccount(JSONObject ldapSettings) {
+		if(ldapSettings == null)
+		{
+			return null;
+		}
+		
+		String userAccount = ldapSettings.getString("userAccount");
+		if(userAccount == null || userAccount.isEmpty())
+		{
+			return null;
+		}
+				
+		return userAccount;
+	}
+	
+	private static String getLdapBaseFilter(JSONObject ldapSettings) {
+		if(ldapSettings == null)
+		{
+			return "(objectClass=*)";
+		}
+		
+		String baseFilter = ldapSettings.getString("filter");
+		if(baseFilter == null || baseFilter.isEmpty())
+		{
+			return "(objectClass=*)";
+		}
+				
+		return baseFilter;
 	}
 
 	private static JSONObject getLDAPSettings(String[] configs) {
@@ -232,7 +280,19 @@ public class BaseFunction{
 				{
 					String key = subStr[0];
 					String value = subStr[1];
+					if(key.equals("filter") || key.equals("userAccount"))	//将等号补回来
+					{
+						if(subStr.length > 2)
+						{
+							for(int j=2; j < subStr.length -1; j++)
+							{
+								value = value + "=" + subStr[j];
+							}
+							value = value + "=" + subStr[subStr.length -1];				
+						}
+					}
 					settings.put(key, value);
+					Log.debug("getLDAPSettings() " + key + " : " + value);
 				}
 			}
 		}
@@ -371,7 +431,7 @@ public class BaseFunction{
 			return backupConfig;				
 		}
 		catch(Exception e) {
-			e.printStackTrace();
+			Log.error(e);
 			return null;
 		}
 	}
@@ -482,7 +542,7 @@ public class BaseFunction{
 		//对于备份服务器是版本仓库，那么备份不按时间存放
 		if(remote.isVerRepos)
 		{
-			return "Backup/" + repos.getId() + "/latest/vdata/";
+			return "Backup/" + repos.getId() + "/data/vdata/";
 		}
 		
 		String backupTime = DateFormat.dateTimeFormat2(date);
@@ -900,6 +960,16 @@ public class BaseFunction{
 			remote.FTP.userName = config.getString("userName");
 			remote.FTP.pwd = config.getString("pwd");
 			remote.FTP.charset = config.getString("charset");
+			remote.FTP.isPassive = false;
+			String isPassive = config.getString("isPassive");
+			if(isPassive != null)
+			{
+				isPassive = isPassive.toLowerCase();
+				if(isPassive.equals("true") || isPassive.equals("1"))
+				{
+					remote.FTP.isPassive = true;					
+				}
+			}
 			
 			Log.debug("parseRemoteStorageConfigForFtp userName:" + remote.FTP.userName + " pwd:" + remote.FTP.pwd + " autoPull:" + remote.autoPull);
 		}
@@ -1260,6 +1330,7 @@ public class BaseFunction{
 	{
 		Doc doc = buildBasicDocBase(reposId, docId, pid, reposPath, path, name, level, type, isRealDoc, localRootPath, localVRootPath, size, checkSum, "");
 		doc.isBussiness = systemLicenseInfo.hasLicense;
+		doc.officeType = officeType;
 		return doc;
 	}
 	
@@ -1267,6 +1338,7 @@ public class BaseFunction{
 	{
 		Doc doc = buildBasicDocBase(reposId, docId, pid, reposPath, path, name, level, type, isRealDoc, localRootPath, localVRootPath, size, checkSum, offsetPath);
 		doc.isBussiness = systemLicenseInfo.hasLicense;
+		doc.officeType = officeType;
 		return doc;
 	}
 	
@@ -1309,7 +1381,7 @@ public class BaseFunction{
 			pw.close();
 		} catch (IOException e) {
 			Log.debug("BaseController>writeJson  ERROR!");
-			e.printStackTrace();
+			Log.error(e);
 		}
 		
 	}
@@ -1331,7 +1403,7 @@ public class BaseFunction{
 			pw.close();
 		} catch (IOException e) {
 			Log.debug("BaseController>writeJson  ERROR!");
-			e.printStackTrace();
+			Log.error(e);
 		}
 		
 	}
@@ -1353,7 +1425,7 @@ public class BaseFunction{
 			pw.close();
 		} catch (IOException e) {
 			Log.debug("BaseController>writeJson  ERROR!");
-			e.printStackTrace();
+			Log.error(e);
 		}
 
 	}
@@ -1528,7 +1600,7 @@ public class BaseFunction{
 			}
 		} catch (IOException e) {
 			Log.debug("syncUpFolder() Exception!");
-			e.printStackTrace();
+			Log.error(e);
 			return false;
 		}
 		return true;
@@ -1646,7 +1718,8 @@ public class BaseFunction{
 	}
 	
 	/****************** 线程锁接口 *********************************************/
-	protected static final Object syncLock = new Object(); 
+	protected static final Object syncLock = new Object(); //For Doc
+	protected static final Object syncLockForRepos = new Object(); //For Repos (add/update)
 	
 	/****************** 路径相关的接口 *****************************************/
 	//WebTmpPath was accessable for web
@@ -1853,7 +1926,7 @@ public class BaseFunction{
 		} catch (Exception e) {
 			closeResource(indexWriter, directory, analyzer);
 	        Log.debug("addSystemLogIndex() 异常");
-			e.printStackTrace();
+			Log.error(e);
 			return false;
 		}
     }
@@ -1873,7 +1946,7 @@ public class BaseFunction{
 			try {
 				directory.close();
 			} catch (IOException e) {
-				e.printStackTrace();
+				Log.error(e);
 			}
 		}
 		if(analyzer != null)
@@ -2104,7 +2177,7 @@ public class BaseFunction{
 			conn.disconnect();			
         } catch (Exception e) {
             Log.debug("postFileStreamAndJsonObj 发送POST请求出现异常！" + e);
-            e.printStackTrace();
+            Log.error(e);
         }
         
         Log.debug("*********************** postFileStreamAndJsonObj End\n");
@@ -2158,11 +2231,11 @@ public class BaseFunction{
 			// 断开连接
 			connection.disconnect();
 		} catch (MalformedURLException e) {
-			e.printStackTrace();
+			Log.error(e);
 		} catch (UnsupportedEncodingException e) {
-			e.printStackTrace();
+			Log.error(e);
 		} catch (IOException e) {
-			e.printStackTrace();
+			Log.error(e);
 		}
 		return returnJson;
 	}
@@ -2186,14 +2259,14 @@ public class BaseFunction{
 	        readInputStream(is, os);
 	        ret = true;
         } catch (Exception e) {
-        	e.printStackTrace();        	
+        	Log.error(e);        	
         } finally {
         	if(is != null)
         	{
         		try {
 					is.close();
 				} catch (IOException e) {
-					e.printStackTrace();
+					Log.error(e);
 				}
         	}
         }
@@ -2359,7 +2432,7 @@ public class BaseFunction{
 		} catch (Exception e) {
 			closeResource(indexWriter, directory, analyzer);
 	        Log.debug("updateUserPreferServerIndex() 异常");
-			e.printStackTrace();
+			Log.error(e);
 			return false;
 		}
     }
@@ -2398,7 +2471,7 @@ public class BaseFunction{
 	        return true;
 		} catch (Exception e) {
 			closeResource(indexWriter, directory, analyzer);
-			e.printStackTrace();
+			Log.error(e);
 			return false;
 		}
     }  
@@ -2436,7 +2509,7 @@ public class BaseFunction{
 		} catch (Exception e) {
 			closeResource(indexWriter, directory, analyzer);
 	        Log.debug("addUserPreferServerIndex() 异常");
-			e.printStackTrace();
+			Log.error(e);
 			return false;
 		}
     }
@@ -2509,7 +2582,7 @@ public class BaseFunction{
 	        }
 		} catch (Exception e) {
 			System.out.println("search() 异常");
-			e.printStackTrace();
+			Log.error(e);
 		} finally {
 			if(ireader != null)
 			{
@@ -2577,7 +2650,7 @@ public class BaseFunction{
 	        IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_46, analyzer);
 	        indexWriter = new IndexWriter(directory, config);
 	
-	        Document document = LuceneUtil2.buildDocumentForObject(link);
+	        Document document = LuceneUtil2.buildDocumentForObject(link, "accessUserIds");
 	        indexWriter.addDocument(document);	        
 	        
 	        indexWriter.commit();
@@ -2595,7 +2668,7 @@ public class BaseFunction{
 		} catch (Exception e) {
 			closeResource(indexWriter, directory, analyzer);
 	        Log.debug("addPreferLinkIndex() 异常");
-			e.printStackTrace();
+			Log.error(e);
 			return false;
 		}
 	}
@@ -2623,7 +2696,7 @@ public class BaseFunction{
 	        IndexWriterConfig config = new IndexWriterConfig(Version.LUCENE_46, analyzer);
 	        indexWriter = new IndexWriter(directory, config);
 	
-	        Document document = LuceneUtil2.buildDocumentForObject(link);
+	        Document document = LuceneUtil2.buildDocumentForObject(link, "accessUserIds");
 	        indexWriter.addDocument(document);	        
 	        
 	        indexWriter.updateDocument(new Term("id", link.id), document);
@@ -2642,7 +2715,7 @@ public class BaseFunction{
 		} catch (Exception e) {
 			closeResource(indexWriter, directory, analyzer);
 	        Log.debug("updatePreferLinkIndex() 异常");
-			e.printStackTrace();
+			Log.error(e);
 			return false;
 		}
 	}
@@ -2714,7 +2787,7 @@ public class BaseFunction{
 	        }
 		} catch (Exception e) {
 			System.out.println("search() 异常");
-			e.printStackTrace();
+			Log.error(e);
 		} finally {
 			if(ireader != null)
 			{

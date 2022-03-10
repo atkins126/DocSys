@@ -1,6 +1,8 @@
 package com.DocSystem.common;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.RandomAccessFile;
 
 import com.alibaba.fastjson.JSON;
@@ -84,6 +86,22 @@ public class Log {
 		}
 	}
 	
+	public static void debug(Exception e) {
+		if(isLogEnable(debug, allowGeneral))
+		{
+			if(logFile == null)
+			{
+				e.printStackTrace(System.out);
+			}
+			else
+			{
+				ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				e.printStackTrace(new PrintStream(baos));
+				toFile(baos.toString(), logFile);
+			}
+		}
+	}
+	
 	public static void info(String content) {
 		if(isLogEnable(info, allowGeneral))
 		{
@@ -98,16 +116,48 @@ public class Log {
 		}
 	}
 	
+	public static void info(Exception e) {
+		if(isLogEnable(info, allowGeneral))
+		{
+			if(logFile == null)
+			{
+				e.printStackTrace(System.out);
+			}
+			else
+			{
+				ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				e.printStackTrace(new PrintStream(baos));
+				toFile(baos.toString(), logFile);
+			}
+		}
+	}
+	
 	public static void warn(String content) {
 		if(isLogEnable(warn, allowAll))
 		{
 			if(logFile == null)
 			{
-				System.out.println("WARN:" + content);
+				System.out.println("[warn] " + content);
 			}
 			else
 			{
-				toFile("WARN:" + content  + "\n", logFile);
+				toFile("[warn] " + content  + "\n", logFile);
+			}
+		}
+	}
+	
+	public static void warn(Exception e) {
+		if(isLogEnable(warn, allowGeneral))
+		{
+			if(logFile == null)
+			{
+				e.printStackTrace(System.out);
+			}
+			else
+			{
+				ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				e.printStackTrace(new PrintStream(baos));
+				toFile(baos.toString(), logFile);
 			}
 		}
 	}
@@ -117,11 +167,27 @@ public class Log {
 		{
 			if(logFile == null)
 			{
-				System.err.println("ERROR:" +content);
+				System.out.println("[error] " +content);
 			}
 			else
 			{
-				toFile("ERROR:" + content  + "\n", logFile);
+				toFile("[error] " + content  + "\n", logFile);
+			}
+		}
+	}
+	
+	public static void error(Exception e) {
+		if(isLogEnable(error, allowGeneral))
+		{
+			if(logFile == null)
+			{
+				e.printStackTrace(System.out);
+			}
+			else
+			{
+				ByteArrayOutputStream baos = new ByteArrayOutputStream();
+				e.printStackTrace(new PrintStream(baos));
+				toFile(baos.toString(), logFile);
 			}
 		}
 	}
@@ -181,7 +247,7 @@ public class Log {
 			debug(Head + json);
 		}
 	}
-		
+	
 	public static void docSysDebugLog(String logStr, ReturnAjax rt) {
 		if(rt != null)
 		{

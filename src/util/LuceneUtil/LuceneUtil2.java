@@ -444,7 +444,8 @@ public class LuceneUtil2   extends BaseFunction
 			        indexWriter = new IndexWriter(directory, config);
 			        
 			        String docPath = doc.getPath() + doc.getName() + "/";
-			        Query query = new WildcardQuery(new Term("path", docPath + "*"));
+			        Term term = new Term("path", docPath + "*");
+			        Query query = new WildcardQuery(term);
 			        //Query query = new PrefixQuery(new Term("path", docPath));
 			        
 			        indexWriter.deleteDocuments(query);
@@ -469,24 +470,24 @@ public class LuceneUtil2   extends BaseFunction
 
 	public static boolean smartSearch(Repos repos, List<QueryCondition> preConditions, String field, String str, String pathFilter, String indexLib, HashMap<String, HitDoc> searchResult, int searchType, int weight, int hitType)
 	{
-		//Log.debug("smartSearch() keyWord:" + str + " field:" + field + " indexLib:" + indexLib);
+		Log.debug("smartSearch() keyWord:" + str + " field:" + field + " indexLib:" + indexLib);
 
 		//利用Index的切词器将查询条件切词后进行精确查找
 		Analyzer analyzer = null;
 		TokenStream stream = null;
-		
+
 		List <String> list = new ArrayList<String>();
 		try {
 			analyzer = new IKAnalyzer();;
 			stream = analyzer.tokenStream("field", new StringReader(str));
-		
+			
 			//保存分词后的结果词汇
 			CharTermAttribute cta = stream.addAttribute(CharTermAttribute.class);
 	
 			stream.reset(); //这句很重要
 	
 			while(stream.incrementToken()) {
-				//Log.debug(cta.toString());
+				Log.debug("smartSearch() subKeyword:" + cta.toString());
 				list.add(cta.toString());
 			}
 	
@@ -508,9 +509,17 @@ public class LuceneUtil2   extends BaseFunction
 			}
 		}
 		
+		if(list.size() > 0)
+		{
+			return search(repos, preConditions, field, list, pathFilter, indexLib, searchResult, searchType, weight, hitType);
+		}
+		
+		return false;
+		/*
 		if(list.size() == 1)
 		{
 			String searchStr = list.get(0);
+			Log.debug("smartSearch subSearchStr[0]:" + searchStr);
 			return search(repos, preConditions, field, searchStr, pathFilter, indexLib, searchResult, searchType, weight, hitType);
 		}
 		
@@ -519,6 +528,7 @@ public class LuceneUtil2   extends BaseFunction
 		{
 			HashMap<String, HitDoc> subSearchResult = new HashMap<String, HitDoc>();
 			String searchStr = list.get(i);
+			Log.debug("smartSearch subSearchStr[" + i + "]:" + searchStr);
 			search(repos, preConditions, field, searchStr, pathFilter, indexLib, subSearchResult, searchType, weight, hitType);
 			if(subSearchResult.size() <= 0)
 			{
@@ -532,7 +542,66 @@ public class LuceneUtil2   extends BaseFunction
 		
 		combineSubSearchResults(subSearcResults, searchResult);		
 		return true;
+		*/
     }
+	
+	public static boolean smartSearchEx(Repos repos, List<QueryCondition> preConditions, String field, String str, String pathFilter, String indexLib, HashMap<String, HitDoc> searchResult, int searchType, int weight, int hitType)
+	{
+		Log.debug("smartSearch() keyWord:" + str + " field:" + field + " indexLib:" + indexLib);
+
+		//利用Index的切词器将查询条件切词后进行精确查找
+		Analyzer analyzer = null;
+		TokenStream stream = null;
+
+		List <String> list = new ArrayList<String>();
+		try {
+			analyzer = new IKAnalyzer();;
+			stream = analyzer.tokenStream("field", new StringReader(str));
+			
+			//保存分词后的结果词汇
+			CharTermAttribute cta = stream.addAttribute(CharTermAttribute.class);
+	
+			stream.reset(); //这句很重要
+	
+			while(stream.incrementToken()) {
+				Log.debug("smartSearch() subKeyword:" + cta.toString());
+				list.add(cta.toString());
+			}
+	
+			stream.end(); //这句很重要
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			if(stream != null)
+			{
+				try {
+					stream.close();
+				} catch (IOException e1) {
+					e1.printStackTrace();
+				}
+			}
+			if(analyzer != null)
+			{
+				analyzer.close();
+			}
+		}
+		
+		if(list.size() > 0)
+		{
+			//如果第一个字符和str相同，那么结果不一定存在，因此需要去掉整个字符串再搜索
+			if(list.size() > 1)
+			{
+				if(list.get(0).equals(str.toLowerCase()))
+				{
+					list.remove(0);
+				}
+			}
+			return search(repos, preConditions, field, list, pathFilter, indexLib, searchResult, searchType, weight, hitType);
+		}
+		
+		return false;
+    }
+	
     
     /**
      * 	关键字模糊查询， 返回docId List
@@ -545,8 +614,7 @@ public class LuceneUtil2   extends BaseFunction
      */
     public static boolean search(Repos repos, List<QueryCondition> preConditions, String field, String str, String pathFilter, String indexLib, HashMap<String, HitDoc> searchResult, int searchType, int weight, int hitType)
 	{
-		//Log.debug("search() keyWord:" + str + " field:" + field + " indexLib:" + indexLib + " searchType:"+ searchType + " weight:" + weight + " pathFilter:" + pathFilter);
-		
+		Log.debug("search() keyWord:" + str + " field:" + field + " indexLib:" + indexLib + " searchType:"+ searchType + " weight:" + weight + " pathFilter:" + pathFilter);		
 		List<QueryCondition> conditions = new ArrayList<QueryCondition>();
 		if(str != null && !str.isEmpty())
 		{
@@ -578,9 +646,56 @@ public class LuceneUtil2   extends BaseFunction
 	    return multiSearch(repos, conditions, indexLib, searchResult, weight, hitType);
     }
     
+    /**
+     * 	关键字模糊查询， 返回docId List
+     * @param weight 
+     * @param hitType 
+     * @param parentPath 
+     * @param <SearchResult>
+     * @param strList: 关键字列表
+     * @param indexLib: 索引库名字
+     */
+    public static boolean search(Repos repos, List<QueryCondition> preConditions, String field, List<String> strList, String pathFilter, String indexLib, HashMap<String, HitDoc> searchResult, int searchType, int weight, int hitType)
+	{
+		List<QueryCondition> conditions = new ArrayList<QueryCondition>();
+		for(int i = 0; i < strList.size(); i++)
+		{
+			String str = strList.get(i);
+			Log.debug("search() subKeyWord[" + i + "]:" + str + " field:" + field + " indexLib:" + indexLib + " searchType:"+ searchType + " weight:" + weight + " pathFilter:" + pathFilter);						
+			if(str != null && !str.isEmpty())
+			{
+				QueryCondition condition = new QueryCondition();
+				condition.setField(field);
+				condition.setValue(str);
+				condition.setQueryType(searchType);
+				conditions.add(condition);
+			}
+		}
+		
+		if(pathFilter != null && !pathFilter.isEmpty())
+		{
+			QueryCondition pathFilterCondition = new QueryCondition();
+			pathFilterCondition.setField("path");
+			pathFilterCondition.setValue(pathFilter);
+			pathFilterCondition.setQueryType(QueryCondition.SEARCH_TYPE_Wildcard_Prefix);
+			conditions.add(pathFilterCondition);
+		}
+		
+		if(preConditions != null)
+		{
+			conditions.addAll(preConditions);
+		}
+		
+		if(conditions.size() == 0)
+		{
+			return false;
+		}
+	    return multiSearch(repos, conditions, indexLib, searchResult, weight, hitType);
+    }
+    
     public static boolean multiSearch(Repos repos, List<QueryCondition> conditions, String indexLib, HashMap<String, HitDoc> searchResult, int weight, int hitType)
 	{
-		//Log.debug("multiSearch() indexLib:" + indexLib + " weight:" + weight);
+		Log.debug("multiSearch() indexLib:" + indexLib + " weight:" + weight);
 		
 	    Directory directory = null;
         DirectoryReader ireader = null;
@@ -590,7 +705,7 @@ public class LuceneUtil2   extends BaseFunction
     		File file = new File(indexLib);
     		if(!file.exists())
     		{
-    			//Log.debug("multiSearch() indexLib:" + indexLib + " 不存在！");
+    			Log.debug("multiSearch() indexLib:" + indexLib + " 不存在！");
     			return false;
     		}
     		
@@ -639,7 +754,7 @@ public class LuceneUtil2   extends BaseFunction
 			}
 			
 			Log.debug("search() 异常");
-			e.printStackTrace();
+			Log.debug(e);
 			return false;
 		}
     }
@@ -785,7 +900,8 @@ public class LuceneUtil2   extends BaseFunction
 	        	break;
 			}	
         } catch (ParseException e) {
-			e.printStackTrace();
+        	Log.info("buidStringQuery() 异常");
+			Log.info(e);
 		}
 		return query;
 	}
@@ -891,8 +1007,8 @@ public class LuceneUtil2   extends BaseFunction
 	    	
 	    	return hitDoc;
         } catch (Exception e) {
-			Log.debug("BuildHitDocFromDocument_FS() 异常");
-			e.printStackTrace();
+			Log.info("BuildHitDocFromDocument_FS() 异常");
+			Log.info(e);
 			return null;
 		}
 	}
@@ -923,7 +1039,8 @@ public class LuceneUtil2   extends BaseFunction
     		
     	    ret = addIndex(doc, content.toString().trim(), indexLib);
 		} catch (Exception e) {
-    		e.printStackTrace();
+			Log.info("addIndexForWord() 异常");
+    		Log.info(e);
     	}	finally {
 			if(doc1 != null)
 			{
@@ -962,8 +1079,9 @@ public class LuceneUtil2   extends BaseFunction
         	
     		str = extractor.getText();       	
         	ret = addIndex(doc,str.toString().trim(), indexLib);
-		} catch (Exception e) {			
-			e.printStackTrace();
+		} catch (Exception e) {	
+			Log.info("addIndexForWord2007() 异常");
+			Log.info(e);
 		} finally {
 			if(extractor != null)
 			{
@@ -1013,7 +1131,8 @@ public class LuceneUtil2   extends BaseFunction
             String text = extractor.getText();  
             ret = addIndex(doc, text.toString().trim(), indexLib);
         } catch(Exception e) {
-            e.printStackTrace();
+			Log.info("addIndexForExcel() 异常");
+			Log.info(e);
             return false;
         } finally {
 			if(extractor != null)
@@ -1061,7 +1180,8 @@ public class LuceneUtil2   extends BaseFunction
             String text = extractor.getText();  
             ret = addIndex(doc, text.toString().trim(), indexLib);
 		} catch (Exception e) { 
-        	e.printStackTrace();  
+			Log.info("addIndexForExcel2007() 异常");
+			Log.info(e);
         } finally {
 			if(extractor != null)
 			{
@@ -1105,7 +1225,8 @@ public class LuceneUtil2   extends BaseFunction
             String text=extractor.getText();  
             ret = addIndex(doc, text.toString().trim(), indexLib);
 		} catch (Exception e) {  
-            e.printStackTrace(); 
+			Log.info("addIndexForPPT() 异常");
+			Log.info(e);
         } finally {
 			if(extractor != null)
 			{
@@ -1142,7 +1263,8 @@ public class LuceneUtil2   extends BaseFunction
             String text=extractor.getText();  
             ret = addIndex(doc, text.toString().trim(), indexLib);
         } catch (Exception e) {  
-        	e.printStackTrace(); 
+			Log.info("addIndexForPPT2007() 异常");
+			Log.info(e);
         } finally {
 			if(extractor != null)
 			{
@@ -1194,7 +1316,8 @@ public class LuceneUtil2   extends BaseFunction
 			
             ret = addIndex(doc, content.toString().trim(), indexLib);
 	   } catch(Exception e) {		
-			e.printStackTrace();
+			Log.info("addIndexForPdf() 异常");
+			Log.info(e);
 	   } finally {
 			if(document != null)
 			{
@@ -1220,7 +1343,7 @@ public class LuceneUtil2   extends BaseFunction
 			String code = FileUtils2.getFileEncode(filePath);
 			if(FileUtils2.isBinaryFile(code) == true)
 			{
-				//Log.debug("addIndexForFile() BinaryFile will not add Index");
+				Log.debug("addIndexForFile() BinaryFile will not add Index");
 				return true;
 			}
 			
@@ -1249,7 +1372,8 @@ public class LuceneUtil2   extends BaseFunction
 			
 			ret = true;
 		} catch(Exception e){
-		    e.printStackTrace();
+			Log.info("addIndexForFile() 异常");
+			Log.info(e);
 		} finally {
 			if(reader != null)
 			{
@@ -1376,7 +1500,7 @@ public class LuceneUtil2   extends BaseFunction
 	        }
 		} catch (Exception e) {
 			Log.debug("getDocListByDocId() 异常");
-			e.printStackTrace();
+			Log.debug(e);
 		} finally {
 	        if(ireader != null)
 	        {
@@ -1461,7 +1585,8 @@ public class LuceneUtil2   extends BaseFunction
 						break;
 					}
 	            } catch (IllegalArgumentException e) {
-					e.printStackTrace();
+	            	Log.info("buildCsvTitleStrForObject() 异常");
+	            	Log.info(e);
 				}
 			}
         }
@@ -1509,9 +1634,11 @@ public class LuceneUtil2   extends BaseFunction
 						sb.append(",");
 					}
 	            } catch (IllegalArgumentException e) {
-					e.printStackTrace();
+	            	Log.info("buildCsvStrForObject() 异常");
+	            	Log.info(e);
 				} catch (IllegalAccessException e) {
-					e.printStackTrace();
+	            	Log.info("buildCsvStrForObject() 异常");
+	            	Log.info(e);
 				}
 			}
         }
@@ -1556,9 +1683,67 @@ public class LuceneUtil2   extends BaseFunction
 						}
 					}
 	            } catch (IllegalArgumentException e) {
-					e.printStackTrace();
+	            	Log.info("buildDocumentForObject() 异常");
+	            	Log.info(e);
 				} catch (IllegalAccessException e) {
-					e.printStackTrace();
+	            	Log.info("buildDocumentForObject() 异常");
+	            	Log.info(e);
+				}
+			}
+        }
+		
+		return document;
+	}
+	
+	@SuppressWarnings("rawtypes")
+	public static Document buildDocumentForObject(Object obj, String textField) {
+		Document document = new Document();	
+		
+		Class userCla = (Class) obj.getClass();
+		java.lang.reflect.Field[] fs = userCla.getDeclaredFields();
+        for (int i = 0; i < fs.length; i++) 
+        {
+        	java.lang.reflect.Field f = fs[i];
+            f.setAccessible(true); // 设置些属性是可以访问的
+            String type = f.getType().toString();
+            Integer fieldType = getFieldType(type);
+			String fieldName = f.getName();
+			//Log.debug("buildDocumentForObject() fieldType:" + type + " fieldName:" + fieldName);
+			if(fieldType != null)
+			{
+	            try {
+					Object val = f.get(obj);
+					if(val != null)
+					{
+						switch(fieldType)
+						{
+						case QueryCondition.FIELD_TYPE_String:
+							if(fieldName.equals(textField))
+							{
+								document.add(new TextField(fieldName, (String)val, Store.YES));
+							}
+							else
+							{
+								document.add(new StringField(fieldName, (String)val, Store.YES));
+							}
+							break;
+						case QueryCondition.FIELD_TYPE_BigDecimal:	//浮点数用字符串表示
+							document.add(new StringField(fieldName, val+"", Store.YES));
+							break;
+						case QueryCondition.FIELD_TYPE_Integer:
+							document.add(new IntField(fieldName, (Integer)val, Store.YES));
+							break;
+						case QueryCondition.FIELD_TYPE_Long:
+							document.add(new LongField(fieldName, (Long)val, Store.YES));
+							break;				
+						}
+					}
+	            } catch (IllegalArgumentException e) {
+	            	Log.info("buildDocumentForObject() 异常");
+	            	Log.info(e);
+				} catch (IllegalAccessException e) {
+	            	Log.info("buildDocumentForObject() 异常");
+	            	Log.info(e);
 				}
 			}
         }
@@ -1602,9 +1787,11 @@ public class LuceneUtil2   extends BaseFunction
 						}
 					}
 	            } catch (IllegalArgumentException e) {
-					e.printStackTrace();
+	            	Log.info("buildObjectForDocument() 异常");
+	            	Log.info(e);
 				} catch (IllegalAccessException e) {
-					e.printStackTrace();
+	            	Log.info("buildObjectForDocument() 异常");
+	            	Log.info(e);
 				}
 			}
         }
@@ -1649,9 +1836,11 @@ public class LuceneUtil2   extends BaseFunction
 				        conditions.add(condition);
 					}
 	            } catch (IllegalArgumentException e) {
-					e.printStackTrace();
+	            	Log.info("buildQueryConditionsForObject() 异常");
+	            	Log.info(e);
 				} catch (IllegalAccessException e) {
-					e.printStackTrace();
+	            	Log.info("buildQueryConditionsForObject() 异常");
+	            	Log.info(e);
 				}
 			}
         }		
